@@ -130,6 +130,9 @@ struct CanvasView: View {
                         }
                     }
 
+                    // Drop zone after last line for dragging sections to bottom
+                    SectionDropZone(lineIndex: vm.lines.count - 1, vm: vm)
+
                     Spacer(minLength: 200)
                 }
                 .padding(.horizontal, 40)
@@ -248,16 +251,16 @@ struct SectionHeaderView: View {
     }
 }
 
-// MARK: - Drop Zone (appears between lines when dragging a section)
+// MARK: - Drop Zone (only expands during drag)
 struct SectionDropZone: View {
     let lineIndex: Int
     @ObservedObject var vm: LyricViewModel
     @State private var isTargeted = false
 
     var body: some View {
-        Rectangle()
-            .fill(isTargeted ? Color.orange.opacity(0.2) : Color.clear)
-            .frame(height: isTargeted ? 4 : 1)
+        RoundedRectangle(cornerRadius: 2)
+            .fill(isTargeted ? Color.orange.opacity(0.25) : Color.clear)
+            .frame(height: isTargeted ? 28 : 0)
             .frame(maxWidth: .infinity)
             .animation(.easeOut(duration: 0.15), value: isTargeted)
             .dropDestination(for: String.self) { items, _ in

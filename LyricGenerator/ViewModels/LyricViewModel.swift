@@ -78,10 +78,19 @@ class LyricViewModel: ObservableObject {
         let section = SectionMarker(type: type, number: number)
         sections.append(section)
 
-        // Tag current and subsequent lines with this section
-        let startIndex = lineIndex ?? (currentLineIndex >= 0 ? currentLineIndex : 0)
-        if startIndex >= 0 && startIndex < lines.count {
-            lines[startIndex].sectionId = section.id
+        if let lineIndex = lineIndex, lineIndex >= 0 && lineIndex < lines.count {
+            lines[lineIndex].sectionId = section.id
+        } else {
+            // Insert a new empty line after the current line (or at end)
+            let insertIndex: Int
+            if currentLineIndex >= 0 && currentLineIndex < lines.count {
+                insertIndex = currentLineIndex + 1
+            } else {
+                insertIndex = lines.count
+            }
+            let newLine = LyricLine(sectionId: section.id)
+            lines.insert(newLine, at: insertIndex)
+            currentLineIndex = insertIndex
         }
 
         undoStack.append(.sectionAdded(sectionIndex: sections.count - 1))
@@ -100,7 +109,14 @@ class LyricViewModel: ObservableObject {
             lines[i].sectionId = nil
         }
         sections.remove(at: index)
+        cleanupOrphanedSections()
         autoSave()
+    }
+
+    /// Remove sections from the array that no line references
+    private func cleanupOrphanedSections() {
+        let referencedIds = Set(lines.compactMap { $0.sectionId })
+        sections.removeAll { !referencedIds.contains($0.id) }
     }
 
     /// Move a section marker to start at a different line
@@ -412,6 +428,7 @@ class LyricViewModel: ObservableObject {
         wordBank = entry.wordBank
         customTitle = entry.customTitle
         sections = entry.sections
+        cleanupOrphanedSections()
         if lines.isEmpty { lines = [LyricLine()] }
         currentEntryId = entry.id
         currentLineIndex = -1
