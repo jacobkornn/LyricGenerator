@@ -351,6 +351,17 @@ class LyricViewModel: ObservableObject {
             results = bankWords + results.filter { w in !bankMatches.contains(w.word) }
         }
 
+        // Sort by syllable match: closest to the rhyming word's syllable count first
+        let targetWordSyllables = SyllableCounter.countWord(target)
+        results.sort { a, b in
+            let aSyl = a.numSyllables ?? 0
+            let bSyl = b.numSyllables ?? 0
+            let aDiff = abs(aSyl - targetWordSyllables)
+            let bDiff = abs(bSyl - targetWordSyllables)
+            if aDiff != bDiff { return aDiff < bDiff }
+            return (a.score ?? 0) > (b.score ?? 0)
+        }
+
         suggestions = results
         suggestionsTargetLabel = predicted
         suggestionsTargetWord = target
