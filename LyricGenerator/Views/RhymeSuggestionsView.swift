@@ -13,7 +13,7 @@ struct RhymeSuggestionsView: View {
             HStack(alignment: .top, spacing: 0) {
                 Color.clear.frame(width: 36, height: 1)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 10) {
                     // Suggestions in a flow layout, clipped to 1 row when collapsed
                     FlowLayout(spacing: 2) {
                         Text("...")
@@ -47,12 +47,13 @@ struct RhymeSuggestionsView: View {
                                 Text(expanded ? "see less" : "see more (+\(suggestions.count - 4))")
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(.secondary.opacity(0.5))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 3)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
                                     .background(
                                         Capsule()
                                             .stroke(Color.secondary.opacity(0.15))
                                     )
+                                    .contentShape(Capsule())
                             }
                             .buttonStyle(.plain)
                         }
