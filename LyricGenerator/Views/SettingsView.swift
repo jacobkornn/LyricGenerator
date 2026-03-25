@@ -1,24 +1,5 @@
 import SwiftUI
 
-struct SettingsToggle: View {
-    @Binding var expanded: Bool
-
-    var body: some View {
-        Button(action: { withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() } }) {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.secondary.opacity(0.5))
-                .frame(width: 28, height: 28)
-                .background(
-                    Circle()
-                        .fill(Color.secondary.opacity(expanded ? 0.12 : 0.06))
-                )
-        }
-        .buttonStyle(.plain)
-        .help("Settings")
-    }
-}
-
 struct SettingsPanel: View {
     @ObservedObject var vm: LyricViewModel
 
@@ -58,9 +39,27 @@ struct SettingsPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
             }
+
+            Divider().opacity(0.2)
+
+            // Flow pattern toggle
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Flow Pattern")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text("Show rhythm beats per line")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary.opacity(0.4))
+                }
+                Spacer()
+                Toggle("", isOn: $vm.showFlowPattern)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+            }
         }
         .padding(14)
-        .frame(width: 220)
+        .frame(width: 260)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(.regularMaterial)

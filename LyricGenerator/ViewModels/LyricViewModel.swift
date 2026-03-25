@@ -2,29 +2,46 @@ import Foundation
 import SwiftUI
 import Combine
 
+/// Represents a single undo action for granular undo
+enum UndoAction {
+    case textChange(lineIndex: Int, oldText: String, oldSyllables: Int, oldEndWord: String, oldStress: [Int])
+    case lineAdded(lineIndex: Int)
+    case lineRemoved(lineIndex: Int, line: LyricLine)
+    case labelOverride(lineId: UUID, oldLabel: String?)
+    case sectionAdded(sectionIndex: Int)
+    case sectionRemoved(sectionIndex: Int, section: SectionMarker)
+}
+
 @MainActor
 class LyricViewModel: ObservableObject {
     @Published var lines: [LyricLine] = [LyricLine()]
     @Published var rhymeLabels: [String?] = [nil]
-    /// Manual label overrides by line ID
-    var labelOverrides: [UUID: String] = [:]
     @Published var schemeString: String = ""
     @Published var suggestions: [RhymeService.RhymeWord] = []
     @Published var suggestionsTargetLabel: String? = nil
     @Published var suggestionsTargetWord: String? = nil
     @Published var lockedEndWord: String? = nil
-    @Published var currentLineIndex: Int = 0
+    @Published var currentLineIndex: Int = -1  // -1 = no active line
     @Published var entries: [LyricEntry] = []
     @Published var currentEntryId: UUID? = nil
     @Published var isDark: Bool = true
     @Published var wordBank: [String] = []
     @Published var wordBankExpanded: Bool = false
     @Published var customTitle: String = ""
-    /// 0.0 = very loose (ending match), 0.5 = moderate, 1.0 = strict (perfect rhymes only)
+    @Published var isLoadingSuggestions: Bool = false
+    @Published var selectedSuggestionIndex: Int = -1
+    @Published var suggestionsExpanded: Bool = false
+    @Published var sections: [SectionMarker] = []
+    @Published var showFlowPattern: Bool = false {
+        didSet {
+            UserDefaults.standard.set(showFlowPattern, forKey: "lyric_show_flow_pattern")
+        }
+    }
+
+    /// 0.0 = very loose, 0.5 = moderate, 1.0 = strict
     @Published var rhymeSensitivity: Double = 0.5 {
         didSet {
             UserDefaults.standard.set(rhymeSensitivity, forKey: "lyric_rhyme_sensitivity")
-            // Re-evaluate scheme, and reload suggestions if they're already showing
             if !suggestions.isEmpty {
                 refreshSchemeAndFetchSuggestions()
             } else {
@@ -36,24 +53,92 @@ class LyricViewModel: ObservableObject {
     private let rhymeService = RhymeService.shared
     private var schemeTask: Task<Void, Never>?
     private var suggestionTask: Task<Void, Never>?
-    private var undoStack: [[LyricLine]] = []
-    private let maxUndoSteps = 30
+    private var undoStack: [UndoAction] = []
+    private let maxUndoSteps = 50
 
     init() {
         entries = StorageService.loadEntries()
         if let pref = UserDefaults.standard.object(forKey: "lyric_dark_mode") as? Bool {
             isDark = pref
         }
+        if UserDefaults.standard.object(forKey: "lyric_show_flow_pattern") != nil {
+            showFlowPattern = UserDefaults.standard.bool(forKey: "lyric_show_flow_pattern")
+        }
         if UserDefaults.standard.object(forKey: "lyric_rhyme_sensitivity") != nil {
             rhymeSensitivity = UserDefaults.standard.double(forKey: "lyric_rhyme_sensitivity")
         }
     }
 
+    // MARK: - Section Management
+
+    func addSection(_ type: SectionType, at lineIndex: Int? = nil) {
+        // Auto-number: count existing sections of same type
+        let existing = sections.filter { $0.type == type }.count
+        let number = (type == .chorus || type == .bridge) ? nil : existing + 1
+        let section = SectionMarker(type: type, number: number)
+        sections.append(section)
+
+        // Tag current and subsequent lines with this section
+        let startIndex = lineIndex ?? (currentLineIndex >= 0 ? currentLineIndex : 0)
+        if startIndex >= 0 && startIndex < lines.count {
+            lines[startIndex].sectionId = section.id
+        }
+
+        undoStack.append(.sectionAdded(sectionIndex: sections.count - 1))
+        trimUndoStack()
+        autoSave()
+    }
+
+    func removeSection(at index: Int) {
+        guard index < sections.count else { return }
+        let removed = sections[index]
+        undoStack.append(.sectionRemoved(sectionIndex: index, section: removed))
+        trimUndoStack()
+
+        // Clear sectionId from lines
+        for i in 0..<lines.count where lines[i].sectionId == removed.id {
+            lines[i].sectionId = nil
+        }
+        sections.remove(at: index)
+        autoSave()
+    }
+
+    /// Move a section marker to start at a different line
+    func moveSection(sectionId: UUID, toLineIndex: Int) {
+        guard toLineIndex >= 0 && toLineIndex < lines.count else { return }
+        // Clear old line assignments for this section
+        for i in 0..<lines.count where lines[i].sectionId == sectionId {
+            lines[i].sectionId = nil
+        }
+        // Assign to new line
+        lines[toLineIndex].sectionId = sectionId
+        autoSave()
+    }
+
+    func sectionForLine(at index: Int) -> SectionMarker? {
+        guard index < lines.count, let sectionId = lines[index].sectionId else { return nil }
+        return sections.first { $0.id == sectionId }
+    }
+
+    /// Get lines grouped by section for rhyme scheme calculation
+    func linesInSameSection(as lineIndex: Int) -> [Int] {
+        guard lineIndex < lines.count else { return [] }
+        let sectionId = lines[lineIndex].sectionId
+        return lines.enumerated()
+            .filter { $0.element.sectionId == sectionId }
+            .map { $0.offset }
+    }
+
     // MARK: - Line Management
 
     func commitLine(at index: Int) {
-        // Save undo state before committing
-        pushUndo()
+        // Save undo state for the line add
+        let oldText = lines[index].text
+        let oldSyl = lines[index].syllableCount
+        let oldEnd = lines[index].endWord
+        let oldStress = lines[index].stressPattern
+        undoStack.append(.textChange(lineIndex: index, oldText: oldText, oldSyllables: oldSyl, oldEndWord: oldEnd, oldStress: oldStress))
+        trimUndoStack()
 
         // If there's a locked word, ensure it's appended
         if let locked = lockedEndWord {
@@ -67,16 +152,26 @@ class LyricViewModel: ObservableObject {
         // Finalize the line
         lines[index].updateText(lines[index].text)
 
-        // Add new empty line
-        let newLine = LyricLine()
+        // Persist any label override
+        if let override = lines[index].labelOverride {
+            lines[index].labelOverride = override
+        }
+
+        // Add new empty line with same section
+        let sectionId = lines[index].sectionId
+        var newLine = LyricLine(sectionId: sectionId)
+        newLine.sectionId = sectionId
         if index == lines.count - 1 {
             lines.append(newLine)
         } else {
             lines.insert(newLine, at: index + 1)
         }
-        currentLineIndex = index + 1
+        undoStack.append(.lineAdded(lineIndex: index + 1))
+        trimUndoStack()
 
-        // Recalculate scheme then fetch suggestions (in sequence)
+        currentLineIndex = index + 1
+        selectedSuggestionIndex = -1
+
         refreshSchemeAndFetchSuggestions()
         autoSave()
     }
@@ -90,7 +185,9 @@ class LyricViewModel: ObservableObject {
     func deleteEmptyLine(at index: Int) {
         guard index > 0, index < lines.count else { return }
         guard lines[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        pushUndo()
+        let removed = lines[index]
+        undoStack.append(.lineRemoved(lineIndex: index, line: removed))
+        trimUndoStack()
         lines.remove(at: index)
         currentLineIndex = index - 1
         refreshScheme()
@@ -99,17 +196,21 @@ class LyricViewModel: ObservableObject {
 
     func overrideLabel(at index: Int, to newLabel: String) {
         guard index < lines.count else { return }
-        labelOverrides[lines[index].id] = newLabel
+        let oldLabel = lines[index].labelOverride
+        undoStack.append(.labelOverride(lineId: lines[index].id, oldLabel: oldLabel))
+        trimUndoStack()
+
+        lines[index].labelOverride = newLabel
         // Apply override immediately
         if index < rhymeLabels.count {
             rhymeLabels[index] = newLabel
             schemeString = rhymeLabels.compactMap { $0 }.joined()
         }
+        autoSave()
     }
 
     // MARK: - Rhyme Scheme
 
-    /// Refresh scheme and return the labels (awaitable)
     private func performSchemeRefresh() async -> [String?] {
         let completedLines = lines.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
         let labels = await rhymeService.assignScheme(to: completedLines, sensitivity: rhymeSensitivity)
@@ -128,15 +229,17 @@ class LyricViewModel: ObservableObject {
             }
         }
 
-        // Apply manual overrides
+        // Apply persisted label overrides
         for (i, line) in lines.enumerated() {
-            if let override = labelOverrides[line.id] {
-                fullLabels[i] = override
+            if let override = line.labelOverride {
+                if i < fullLabels.count {
+                    fullLabels[i] = override
+                }
             }
         }
 
         rhymeLabels = fullLabels
-        schemeString = labels.compactMap { $0 }.joined()
+        schemeString = fullLabels.compactMap { $0 }.joined()
         return fullLabels
     }
 
@@ -150,13 +253,14 @@ class LyricViewModel: ObservableObject {
     func refreshSchemeAndFetchSuggestions() {
         schemeTask?.cancel()
         suggestionTask?.cancel()
+        isLoadingSuggestions = true
         schemeTask = Task {
-            // First: refresh the scheme and wait for it
             let freshLabels = await performSchemeRefresh()
             guard !Task.isCancelled else { return }
-
-            // Now fetch suggestions using the fresh labels
             await performSuggestionFetch(using: freshLabels)
+            if !Task.isCancelled {
+                isLoadingSuggestions = false
+            }
         }
     }
 
@@ -191,7 +295,7 @@ class LyricViewModel: ObservableObject {
             return
         }
 
-        // Calculate average syllable count of completed lines for flow matching
+        // Calculate average syllable count for flow matching
         let completedLines = lines.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }
         let avgSyllables: Int? = completedLines.isEmpty ? nil : {
             let total = completedLines.reduce(0) { $0 + $1.syllableCount }
@@ -201,11 +305,10 @@ class LyricViewModel: ObservableObject {
             return remaining
         }()
 
-        // Get API suggestions
         var results = await rhymeService.getSuggestions(for: target, targetSyllables: avgSyllables, sensitivity: rhymeSensitivity)
         guard !Task.isCancelled else { return }
 
-        // Prepend word bank matches that rhyme with the target
+        // Prepend word bank matches
         let bankMatches = await wordBankRhymes(for: target)
         if !bankMatches.isEmpty {
             let bankWords = bankMatches.map {
@@ -217,6 +320,7 @@ class LyricViewModel: ObservableObject {
         suggestions = results
         suggestionsTargetLabel = predicted
         suggestionsTargetWord = target
+        selectedSuggestionIndex = -1
     }
 
     private func wordBankRhymes(for target: String) async -> [String] {
@@ -229,14 +333,38 @@ class LyricViewModel: ObservableObject {
         return matches
     }
 
+    // MARK: - Suggestion Keyboard Navigation
+
+    func selectNextSuggestion() {
+        guard !suggestions.isEmpty else { return }
+        selectedSuggestionIndex = min(selectedSuggestionIndex + 1, suggestions.count - 1)
+    }
+
+    func selectPreviousSuggestion() {
+        guard !suggestions.isEmpty else { return }
+        selectedSuggestionIndex = max(selectedSuggestionIndex - 1, -1)
+    }
+
+    func confirmSelectedSuggestion() {
+        guard selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.count else { return }
+        selectSuggestion(suggestions[selectedSuggestionIndex].word)
+    }
+
+    func dismissSuggestions() {
+        selectedSuggestionIndex = -1
+        suggestions = []
+        suggestionsExpanded = false
+    }
+
     func selectSuggestion(_ word: String) {
         lockedEndWord = word
         suggestions = []
+        selectedSuggestionIndex = -1
+        suggestionsExpanded = false
     }
 
     func clearLockedWord() {
         lockedEndWord = nil
-        // Re-fetch suggestions since user cancelled
         refreshSchemeAndFetchSuggestions()
     }
 
@@ -264,12 +392,14 @@ class LyricViewModel: ObservableObject {
             entries[idx].lines = lines
             entries[idx].wordBank = wordBank
             entries[idx].customTitle = customTitle
+            entries[idx].sections = sections
             entries[idx].refreshTitle()
         } else {
-            var entry = LyricEntry(lines: lines, wordBank: wordBank, customTitle: customTitle)
+            var entry = LyricEntry(lines: lines, wordBank: wordBank, customTitle: customTitle, sections: sections)
             entry.lines = lines
             entry.wordBank = wordBank
             entry.customTitle = customTitle
+            entry.sections = sections
             entry.refreshTitle()
             entries.insert(entry, at: 0)
             currentEntryId = entry.id
@@ -281,11 +411,14 @@ class LyricViewModel: ObservableObject {
         lines = entry.lines
         wordBank = entry.wordBank
         customTitle = entry.customTitle
+        sections = entry.sections
         if lines.isEmpty { lines = [LyricLine()] }
         currentEntryId = entry.id
-        currentLineIndex = max(0, lines.count - 1)
+        currentLineIndex = -1
         lockedEndWord = nil
         suggestions = []
+        selectedSuggestionIndex = -1
+        undoStack = []
         refreshScheme()
     }
 
@@ -299,14 +432,16 @@ class LyricViewModel: ObservableObject {
         lockedEndWord = nil
         wordBank = []
         customTitle = ""
+        sections = []
         currentLineIndex = 0
         currentEntryId = nil
+        selectedSuggestionIndex = -1
+        undoStack = []
     }
 
     func deleteEntry(_ entry: LyricEntry) {
         entries.removeAll { $0.id == entry.id }
         if currentEntryId == entry.id {
-            // Reset canvas without auto-saving (which would re-create the deleted entry)
             lines = [LyricLine()]
             rhymeLabels = [nil]
             schemeString = ""
@@ -315,25 +450,57 @@ class LyricViewModel: ObservableObject {
             lockedEndWord = nil
             wordBank = []
             customTitle = ""
-            currentLineIndex = 0
+            sections = []
+            currentLineIndex = -1
             currentEntryId = nil
+            selectedSuggestionIndex = -1
         }
         StorageService.saveEntries(entries)
     }
 
-    // MARK: - Undo
+    // MARK: - Granular Undo
 
-    private func pushUndo() {
-        undoStack.append(lines)
-        if undoStack.count > maxUndoSteps {
+    private func trimUndoStack() {
+        while undoStack.count > maxUndoSteps {
             undoStack.removeFirst()
         }
     }
 
     func undo() {
-        guard let previous = undoStack.popLast() else { return }
-        lines = previous
-        currentLineIndex = max(0, lines.count - 1)
+        guard let action = undoStack.popLast() else { return }
+        switch action {
+        case .textChange(let lineIndex, let oldText, let oldSyl, let oldEnd, let oldStress):
+            if lineIndex < lines.count {
+                lines[lineIndex].text = oldText
+                lines[lineIndex].syllableCount = oldSyl
+                lines[lineIndex].endWord = oldEnd
+                lines[lineIndex].stressPattern = oldStress
+                currentLineIndex = lineIndex
+            }
+        case .lineAdded(let lineIndex):
+            if lineIndex < lines.count {
+                lines.remove(at: lineIndex)
+                currentLineIndex = max(0, lineIndex - 1)
+            }
+        case .lineRemoved(let lineIndex, let line):
+            lines.insert(line, at: min(lineIndex, lines.count))
+            currentLineIndex = lineIndex
+        case .labelOverride(let lineId, let oldLabel):
+            if let idx = lines.firstIndex(where: { $0.id == lineId }) {
+                lines[idx].labelOverride = oldLabel
+            }
+        case .sectionAdded(let sectionIndex):
+            if sectionIndex < sections.count {
+                let section = sections[sectionIndex]
+                for i in 0..<lines.count where lines[i].sectionId == section.id {
+                    lines[i].sectionId = nil
+                }
+                sections.remove(at: sectionIndex)
+            }
+        case .sectionRemoved(let sectionIndex, let section):
+            sections.insert(section, at: min(sectionIndex, sections.count))
+        }
+
         lockedEndWord = nil
         suggestions = []
         refreshScheme()
@@ -353,6 +520,87 @@ class LyricViewModel: ObservableObject {
     func toggleTheme() {
         isDark.toggle()
         UserDefaults.standard.set(isDark, forKey: "lyric_dark_mode")
+    }
+
+    // MARK: - Rhyme Map Data
+
+    /// Returns connections between lines that rhyme (for visualization)
+    var rhymeConnections: [(from: Int, to: Int, label: String)] {
+        var connections: [(Int, Int, String)] = []
+        var labelGroups: [String: [Int]] = [:]
+
+        for (i, label) in rhymeLabels.enumerated() {
+            guard let label = label else { continue }
+            if !lines[i].text.trimmingCharacters(in: .whitespaces).isEmpty {
+                labelGroups[label, default: []].append(i)
+            }
+        }
+
+        for (label, indices) in labelGroups where indices.count > 1 {
+            for i in 0..<indices.count - 1 {
+                connections.append((indices[i], indices[i + 1], label))
+            }
+        }
+
+        return connections
+    }
+
+    // MARK: - Export
+
+    func exportPlainText() -> String {
+        var output = ""
+        if !customTitle.isEmpty {
+            output += customTitle + "\n\n"
+        }
+
+        var currentSectionId: UUID? = nil
+        for line in lines {
+            if line.sectionId != currentSectionId, let sectionId = line.sectionId,
+               let section = sections.first(where: { $0.id == sectionId }) {
+                if !output.isEmpty { output += "\n" }
+                output += "[\(section.displayName)]\n"
+                currentSectionId = sectionId
+            }
+            let text = line.text.trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty {
+                output += text + "\n"
+            }
+        }
+        return output
+    }
+
+    func exportAnnotated() -> String {
+        var output = ""
+        if !customTitle.isEmpty {
+            output += customTitle + "\n"
+            output += String(repeating: "=", count: customTitle.count) + "\n\n"
+        }
+
+        if !schemeString.isEmpty {
+            output += "Rhyme Scheme: \(schemeString)\n\n"
+        }
+
+        var currentSectionId: UUID? = nil
+        for (i, line) in lines.enumerated() {
+            if line.sectionId != currentSectionId, let sectionId = line.sectionId,
+               let section = sections.first(where: { $0.id == sectionId }) {
+                if !output.isEmpty { output += "\n" }
+                output += "[\(section.displayName)]\n"
+                currentSectionId = sectionId
+            }
+            let text = line.text.trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty {
+                let label = (rhymeLabels[safe: i] ?? nil) ?? " "
+                let syl = line.syllableCount
+                output += "  \(label) │ \(text) │ \(syl) syl\n"
+            }
+        }
+
+        if !wordBank.isEmpty {
+            output += "\nWord Bank: \(wordBank.joined(separator: ", "))\n"
+        }
+
+        return output
     }
 }
 

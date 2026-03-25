@@ -23,6 +23,10 @@
 		AA000014 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000014; };
 		AA000015 /* WordBankView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000015; };
 		AA000016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000016; };
+		7B9FD9E364D9BA0FE2FBA612 /* StressAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7C47274A67E5DB5F3BF4C8C /* StressAnalyzer.swift */; };
+		EEFF100D4B1463842829BC39 /* OfflineRhymeDict.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63C1C992353A17D937C2B08 /* OfflineRhymeDict.swift */; };
+		B7D47C8552460662260C757F /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D639F63A43FA0B152BA7FCBF /* ExportView.swift */; };
+		CDAE84929BD6C983BAEF0D4F /* RhymeMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C94454BD864BA886FFC974E /* RhymeMapView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +47,10 @@
 		AB000016 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		AB000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AC000001 /* LyricGenerator.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LyricGenerator.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E7C47274A67E5DB5F3BF4C8C /* StressAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StressAnalyzer.swift; sourceTree = "<group>"; };
+		B63C1C992353A17D937C2B08 /* OfflineRhymeDict.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineRhymeDict.swift; sourceTree = "<group>"; };
+		D639F63A43FA0B152BA7FCBF /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
+		1C94454BD864BA886FFC974E /* RhymeMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RhymeMapView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,6 +101,8 @@
 				AB000005 /* RhymeService.swift */,
 				AB000006 /* StorageService.swift */,
 				AB000007 /* SyllableCounter.swift */,
+				E7C47274A67E5DB5F3BF4C8C /* StressAnalyzer.swift */,
+				B63C1C992353A17D937C2B08 /* OfflineRhymeDict.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -123,6 +133,8 @@
 				AB000013 /* ThemeToggleView.swift */,
 				AB000015 /* WordBankView.swift */,
 				AB000016 /* SettingsView.swift */,
+				D639F63A43FA0B152BA7FCBF /* ExportView.swift */,
+				1C94454BD864BA886FFC974E /* RhymeMapView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -211,6 +223,10 @@
 				AA000013 /* ThemeToggleView.swift in Sources */,
 				AA000015 /* WordBankView.swift in Sources */,
 				AA000016 /* SettingsView.swift in Sources */,
+				7B9FD9E364D9BA0FE2FBA612 /* StressAnalyzer.swift in Sources */,
+				EEFF100D4B1463842829BC39 /* OfflineRhymeDict.swift in Sources */,
+				B7D47C8552460662260C757F /* ExportView.swift in Sources */,
+				CDAE84929BD6C983BAEF0D4F /* RhymeMapView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

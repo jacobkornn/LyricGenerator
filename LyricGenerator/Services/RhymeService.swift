@@ -6,8 +6,9 @@ actor RhymeService {
     private var rhymeCache: [String: [RhymeWord]] = [:]
     private var nearRhymeCache: [String: [RhymeWord]] = [:]
     private let session: URLSession
+    private var isOnline: Bool = true
 
-    struct RhymeWord: Codable {
+    struct RhymeWord: Codable, Equatable {
         let word: String
         let score: Int?
         let numSyllables: Int?
@@ -25,23 +26,34 @@ actor RhymeService {
         self.session = URLSession(configuration: config)
     }
 
-    /// Fetch perfect rhymes from Datamuse API
+    /// Fetch perfect rhymes from Datamuse API with offline fallback
     func fetchRhymes(for word: String) async -> [RhymeWord] {
         let key = word.lowercased()
         if let cached = rhymeCache[key] { return cached }
         guard !key.isEmpty else { return [] }
 
+        // Try API first
         do {
             let urlStr = "https://api.datamuse.com/words?rel_rhy=\(key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key)&max=50&md=s"
-            guard let url = URL(string: urlStr) else { return [] }
+            guard let url = URL(string: urlStr) else { return offlineFallback(for: key) }
             let (data, _) = try await session.data(from: url)
             let results = try JSONDecoder().decode([DatamuseResult].self, from: data)
             let words = results.map { RhymeWord(word: $0.word, score: $0.score, numSyllables: $0.numSyllables) }
             rhymeCache[key] = words
+            isOnline = true
             return words
         } catch {
-            return []
+            isOnline = false
+            return offlineFallback(for: key)
         }
+    }
+
+    /// Offline fallback using built-in dictionary
+    private func offlineFallback(for word: String) -> [RhymeWord] {
+        let rhymes = OfflineRhymeDict.getRhymes(for: word)
+        let words = rhymes.map { RhymeWord(word: $0, score: 100, numSyllables: SyllableCounter.countWord($0)) }
+        rhymeCache[word] = words
+        return words
     }
 
     /// Fetch near/approximate rhymes from Datamuse API
@@ -49,6 +61,21 @@ actor RhymeService {
         let key = word.lowercased()
         if let cached = nearRhymeCache[key] { return cached }
         guard !key.isEmpty else { return [] }
+
+        guard isOnline else {
+            // Use offline ending match for near rhymes
+            let ending = String(key.suffix(2))
+            var results: [String] = []
+            let perfectRhymes = Set(OfflineRhymeDict.getRhymes(for: key))
+            for group in [key] {
+                let endingRhymes = OfflineRhymeDict.getRhymes(for: group)
+                    .filter { !perfectRhymes.contains($0) && $0.hasSuffix(ending) }
+                results.append(contentsOf: endingRhymes)
+            }
+            let words = results.map { RhymeWord(word: $0, score: 50, numSyllables: SyllableCounter.countWord($0)) }
+            nearRhymeCache[key] = words
+            return words
+        }
 
         do {
             let urlStr = "https://api.datamuse.com/words?rel_nry=\(key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key)&max=50&md=s"
@@ -59,28 +86,29 @@ actor RhymeService {
             nearRhymeCache[key] = words
             return words
         } catch {
+            isOnline = false
             return []
         }
     }
 
     /// Check if two words rhyme at the given sensitivity level
-    /// sensitivity: 0.0 = very loose, 0.5 = moderate, 1.0 = strict
     func doWordsRhyme(_ word1: String, _ word2: String, sensitivity: Double) async -> Bool {
         let w1 = word1.lowercased()
         let w2 = word2.lowercased()
         if w1 == w2 { return true }
         if w1.isEmpty || w2.isEmpty { return false }
 
-        // Perfect rhyme check (always valid at any sensitivity)
+        // Check offline dictionary first (fast)
+        if OfflineRhymeDict.doWordsRhyme(w1, w2) { return true }
+
+        // Perfect rhyme check via API
         let rhymes = await fetchRhymes(for: w1)
         if rhymes.contains(where: { $0.word == w2 }) { return true }
         let rhymes2 = await fetchRhymes(for: w2)
         if rhymes2.contains(where: { $0.word == w1 }) { return true }
 
         // Strict mode: only perfect rhymes
-        if sensitivity >= 0.85 {
-            return false
-        }
+        if sensitivity >= 0.85 { return false }
 
         // Medium mode: also allow 3+ char ending match
         if sensitivity >= 0.4 {
@@ -95,7 +123,6 @@ actor RhymeService {
             return true
         }
 
-        // Check near rhymes from Datamuse
         let nearRhymes = await fetchNearRhymes(for: w1)
         if nearRhymes.contains(where: { $0.word == w2 }) { return true }
         let nearRhymes2 = await fetchNearRhymes(for: w2)
@@ -171,12 +198,14 @@ actor RhymeService {
         return nil
     }
 
-    /// Fetch sounds-like words from Datamuse API (very loose matches)
+    /// Fetch sounds-like words from Datamuse API
     func fetchSoundsLike(for word: String) async -> [RhymeWord] {
         let key = word.lowercased()
         let cacheKey = "sl_\(key)"
         if let cached = nearRhymeCache[cacheKey] { return cached }
         guard !key.isEmpty else { return [] }
+
+        guard isOnline else { return [] }
 
         do {
             let urlStr = "https://api.datamuse.com/words?sl=\(key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key)&max=30&md=s"
@@ -187,12 +216,12 @@ actor RhymeService {
             nearRhymeCache[cacheKey] = words
             return words
         } catch {
+            isOnline = false
             return []
         }
     }
 
     /// Get rhyme suggestions filtered by sensitivity and syllable count
-    /// Strict: only top perfect rhymes. Loose: perfect + near + sounds-like.
     func getSuggestions(for targetWord: String, targetSyllables: Int?, sensitivity: Double) async -> [RhymeWord] {
         var allRhymes = await fetchRhymes(for: targetWord)
 
@@ -227,4 +256,7 @@ actor RhymeService {
             return (a.score ?? 0) > (b.score ?? 0)
         }
     }
+
+    /// Whether the service is currently online
+    var online: Bool { isOnline }
 }

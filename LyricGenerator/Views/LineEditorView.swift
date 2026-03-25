@@ -14,6 +14,11 @@ struct LineEditorView: View {
     var onBackspaceEmpty: (() -> Void)? = nil
     var onLabelEdit: ((String) -> Void)? = nil
     var targetSyllableCount: Int? = nil
+    var showStressPattern: Bool = false
+    var onTabSuggestion: (() -> Void)? = nil
+    var onArrowDown: (() -> Void)? = nil
+    var onArrowUp: (() -> Void)? = nil
+    var onEscSuggestion: (() -> Void)? = nil
 
     @State private var lockedHovered: Bool = false
     @State private var editingLabel: Bool = false
@@ -27,7 +32,7 @@ struct LineEditorView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Rhyme label — double-click to edit
+            // Rhyme label
             ZStack {
                 if editingLabel {
                     let displayLabel = editLabelText.uppercased()
@@ -79,7 +84,11 @@ struct LineEditorView: View {
                         onTextChange: onTextChange,
                         onEnter: onCommit,
                         onFocus: onFocus,
-                        onBackspaceEmpty: onBackspaceEmpty ?? {}
+                        onBackspaceEmpty: onBackspaceEmpty ?? {},
+                        onTab: onTabSuggestion ?? {},
+                        onArrowDown: onArrowDown ?? {},
+                        onArrowUp: onArrowUp ?? {},
+                        onEscape: onEscSuggestion ?? {}
                     )
 
                     if let locked = lockedEndWord, isActive {
@@ -105,37 +114,44 @@ struct LineEditorView: View {
                     }
                 }
 
-                // Syllable count / remaining indicator
-                if isActive, let locked = lockedEndWord, let target = targetSyllableCount {
-                    let lockedSyl = SyllableCounter.countWord(locked)
-                    let currentSyl = line.syllableCount
-                    let totalSoFar = currentSyl + lockedSyl
-                    let remaining = target - totalSoFar
-                    HStack(spacing: 6) {
-                        Text("\(currentSyl) + \(lockedSyl) syl")
+                // Info row: syllables + stress pattern
+                HStack(spacing: 8) {
+                    // Syllable count & flow indicator
+                    if isActive, let locked = lockedEndWord, let target = targetSyllableCount {
+                        let lockedSyl = SyllableCounter.countWord(locked)
+                        let currentSyl = line.syllableCount
+                        let totalSoFar = currentSyl + lockedSyl
+                        let remaining = target - totalSoFar
+                        HStack(spacing: 6) {
+                            Text("\(currentSyl) + \(lockedSyl) syl")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary.opacity(0.35))
+                            if remaining > 0 {
+                                Text("~\(remaining) more to match flow")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.orange.opacity(0.6))
+                            } else if remaining == 0 {
+                                Text("on target")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.green.opacity(0.6))
+                            } else {
+                                Text("\(abs(remaining)) over")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.red.opacity(0.5))
+                            }
+                        }
+                    } else if !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                        Text("\(line.syllableCount) syl")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(.secondary.opacity(0.35))
-                        if remaining > 0 {
-                            Text("~\(remaining) more to match flow")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.orange.opacity(0.6))
-                        } else if remaining == 0 {
-                            Text("on target")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.green.opacity(0.6))
-                        } else {
-                            Text("\(abs(remaining)) over")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.red.opacity(0.5))
-                        }
                     }
-                    .padding(.top, 1)
-                } else if !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Text("\(line.syllableCount) syl")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary.opacity(0.35))
-                        .padding(.top, 1)
+
+                    // Stress / beat pattern
+                    if showStressPattern && !line.stressPattern.isEmpty && !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                        StressPatternView(pattern: line.stressPattern)
+                    }
                 }
+                .padding(.top, 1)
             }
         }
         .padding(.vertical, 2)
@@ -154,6 +170,28 @@ struct LineEditorView: View {
     }
 }
 
+// MARK: - Stress Pattern Visualization
+struct StressPatternView: View {
+    let pattern: [Int]
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(pattern.enumerated()), id: \.offset) { _, stress in
+                Circle()
+                    .fill(stress == 1 ? Color.orange.opacity(0.6) : Color.secondary.opacity(0.15))
+                    .frame(width: stress == 1 ? 7 : 5, height: stress == 1 ? 7 : 5)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(
+            Capsule()
+                .fill(Color.secondary.opacity(0.04))
+        )
+        .help("Rhythm: large = stressed, small = unstressed")
+    }
+}
+
 // MARK: - AppKit NSTextField wrapper with proper focus & Enter handling
 
 struct LyricTextField: NSViewRepresentable {
@@ -163,6 +201,10 @@ struct LyricTextField: NSViewRepresentable {
     let onEnter: () -> Void
     let onFocus: () -> Void
     let onBackspaceEmpty: () -> Void
+    let onTab: () -> Void
+    let onArrowDown: () -> Void
+    let onArrowUp: () -> Void
+    let onEscape: () -> Void
 
     func makeNSView(context: Context) -> LyricNSTextField {
         let field = LyricNSTextField()
@@ -191,8 +233,11 @@ struct LyricTextField: NSViewRepresentable {
         context.coordinator.onEnter = onEnter
         context.coordinator.onFocus = onFocus
         context.coordinator.onBackspaceEmpty = onBackspaceEmpty
+        context.coordinator.onTab = onTab
+        context.coordinator.onArrowDown = onArrowDown
+        context.coordinator.onArrowUp = onArrowUp
+        context.coordinator.onEscape = onEscape
 
-        // Only grab focus when isActive transitions from false → true
         let wasActive = context.coordinator.wasActive
         context.coordinator.wasActive = isActive
 
@@ -207,7 +252,11 @@ struct LyricTextField: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onTextChange: onTextChange, onEnter: onEnter, onFocus: onFocus, onBackspaceEmpty: onBackspaceEmpty)
+        Coordinator(
+            onTextChange: onTextChange, onEnter: onEnter, onFocus: onFocus,
+            onBackspaceEmpty: onBackspaceEmpty, onTab: onTab,
+            onArrowDown: onArrowDown, onArrowUp: onArrowUp, onEscape: onEscape
+        )
     }
 
     class Coordinator: NSObject, NSTextFieldDelegate, NSControlTextEditingDelegate {
@@ -215,13 +264,24 @@ struct LyricTextField: NSViewRepresentable {
         var onEnter: () -> Void
         var onFocus: () -> Void
         var onBackspaceEmpty: () -> Void
+        var onTab: () -> Void
+        var onArrowDown: () -> Void
+        var onArrowUp: () -> Void
+        var onEscape: () -> Void
         var wasActive: Bool = false
 
-        init(onTextChange: @escaping (String) -> Void, onEnter: @escaping () -> Void, onFocus: @escaping () -> Void, onBackspaceEmpty: @escaping () -> Void) {
+        init(onTextChange: @escaping (String) -> Void, onEnter: @escaping () -> Void,
+             onFocus: @escaping () -> Void, onBackspaceEmpty: @escaping () -> Void,
+             onTab: @escaping () -> Void, onArrowDown: @escaping () -> Void,
+             onArrowUp: @escaping () -> Void, onEscape: @escaping () -> Void) {
             self.onTextChange = onTextChange
             self.onEnter = onEnter
             self.onFocus = onFocus
             self.onBackspaceEmpty = onBackspaceEmpty
+            self.onTab = onTab
+            self.onArrowDown = onArrowDown
+            self.onArrowUp = onArrowUp
+            self.onEscape = onEscape
         }
 
         func controlTextDidChange(_ obj: Notification) {
@@ -243,6 +303,22 @@ struct LyricTextField: NSViewRepresentable {
                     onBackspaceEmpty()
                     return true
                 }
+            }
+            if commandSelector == #selector(NSResponder.insertTab(_:)) {
+                onTab()
+                return true
+            }
+            if commandSelector == #selector(NSResponder.moveDown(_:)) {
+                onArrowDown()
+                return true
+            }
+            if commandSelector == #selector(NSResponder.moveUp(_:)) {
+                onArrowUp()
+                return true
+            }
+            if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+                onEscape()
+                return true
             }
             return false
         }

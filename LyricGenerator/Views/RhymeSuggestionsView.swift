@@ -4,9 +4,9 @@ struct RhymeSuggestionsView: View {
     let suggestions: [RhymeService.RhymeWord]
     let targetLabel: String?
     let targetWord: String?
+    var selectedIndex: Int = -1
     let onSelect: (String) -> Void
-
-    @State private var expanded = false
+    @Binding var expanded: Bool
 
     private var preview: [RhymeService.RhymeWord] {
         Array(suggestions.prefix(4))
@@ -19,7 +19,6 @@ struct RhymeSuggestionsView: View {
     var body: some View {
         if !suggestions.isEmpty {
             HStack(alignment: .top, spacing: 0) {
-                // Spacer for alignment with rhyme label column
                 Color.clear.frame(width: 36, height: 1)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -29,8 +28,13 @@ struct RhymeSuggestionsView: View {
                             .font(.system(size: 14, weight: .light))
 
                         ForEach(Array(preview.enumerated()), id: \.1.word) { i, rhyme in
+                            let globalIndex = i
                             HStack(spacing: 0) {
-                                SuggestionChip(word: rhyme.word, syllables: rhyme.numSyllables) {
+                                SuggestionChip(
+                                    word: rhyme.word,
+                                    syllables: rhyme.numSyllables,
+                                    isSelected: globalIndex == selectedIndex
+                                ) {
                                     onSelect(rhyme.word)
                                 }
                                 if i < preview.count - 1 {
@@ -58,11 +62,16 @@ struct RhymeSuggestionsView: View {
 
                         if expanded {
                             ForEach(Array(rest.enumerated()), id: \.1.word) { i, rhyme in
+                                let globalIndex = i + 4
                                 HStack(spacing: 0) {
                                     Text(",")
                                         .foregroundColor(.secondary.opacity(0.3))
                                         .font(.system(size: 14))
-                                    SuggestionChip(word: rhyme.word, syllables: rhyme.numSyllables) {
+                                    SuggestionChip(
+                                        word: rhyme.word,
+                                        syllables: rhyme.numSyllables,
+                                        isSelected: globalIndex == selectedIndex
+                                    ) {
                                         onSelect(rhyme.word)
                                     }
                                 }
@@ -82,13 +91,44 @@ struct RhymeSuggestionsView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    .frame(maxHeight: expanded ? 200 : nil)
 
-                    if let word = targetWord {
-                        Text("rhymes with \"\(word)\"")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary.opacity(0.3))
-                            .italic()
-                            .tracking(0.3)
+                    // Wrap expanded in scroll if very long
+                    if expanded && rest.count > 20 {
+                        ScrollView {
+                            FlowLayout(spacing: 2) {
+                                ForEach(Array(rest.dropFirst(20).enumerated()), id: \.1.word) { i, rhyme in
+                                    SuggestionChip(
+                                        word: rhyme.word,
+                                        syllables: rhyme.numSyllables,
+                                        isSelected: (i + 24) == selectedIndex
+                                    ) {
+                                        onSelect(rhyme.word)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 150)
+                    }
+
+                    HStack(spacing: 8) {
+                        if let word = targetWord, let label = targetLabel {
+                            Text("rhymes with \"\(word)\" (\(label))")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary.opacity(0.3))
+                                .italic()
+                                .tracking(0.3)
+                        } else if let word = targetWord {
+                            Text("rhymes with \"\(word)\"")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary.opacity(0.3))
+                                .italic()
+                                .tracking(0.3)
+                        }
+
+                        Text("Tab to select · ↑↓ to navigate · Esc to dismiss")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.secondary.opacity(0.2))
                     }
                 }
             }
@@ -101,6 +141,7 @@ struct RhymeSuggestionsView: View {
 struct SuggestionChip: View {
     let word: String
     let syllables: Int?
+    var isSelected: Bool = false
     let onTap: () -> Void
 
     @State private var hovered = false
@@ -109,7 +150,7 @@ struct SuggestionChip: View {
         Button(action: onTap) {
             HStack(spacing: 3) {
                 Text(word)
-                    .font(.system(size: 14, weight: .light))
+                    .font(.system(size: 14, weight: isSelected ? .medium : .light))
                 if let syl = syllables {
                     Text("\(syl)")
                         .font(.system(size: 9, weight: .medium))
@@ -117,12 +158,18 @@ struct SuggestionChip: View {
                         .superscript()
                 }
             }
-            .foregroundColor(hovered ? .primary : .secondary.opacity(0.55))
+            .foregroundColor(isSelected ? .primary : (hovered ? .primary : .secondary.opacity(0.55)))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(hovered ? Color.secondary.opacity(0.08) : Color.clear)
+                    .fill(isSelected ? Color.orange.opacity(0.15) : (hovered ? Color.secondary.opacity(0.08) : Color.clear))
+            )
+            .overlay(
+                isSelected ?
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                : nil
             )
         }
         .buttonStyle(.plain)

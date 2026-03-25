@@ -95,13 +95,7 @@ struct SidebarEntryRow: View {
                     }
                 }
 
-                // Preview of second line if exists
-                if let secondLine = entry.lines.dropFirst().first(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) {
-                    Text(secondLine.text.trimmingCharacters(in: .whitespaces))
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary.opacity(0.4))
-                        .lineLimit(1)
-                }
+
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)

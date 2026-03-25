@@ -6,6 +6,7 @@ struct LyricEntry: Identifiable, Codable {
     var customTitle: String
     var lines: [LyricLine]
     var wordBank: [String]
+    var sections: [SectionMarker]
     var createdAt: Date
     var updatedAt: Date
 
@@ -15,10 +16,11 @@ struct LyricEntry: Identifiable, Codable {
         return title
     }
 
-    init(lines: [LyricLine] = [], wordBank: [String] = [], customTitle: String = "") {
+    init(lines: [LyricLine] = [], wordBank: [String] = [], customTitle: String = "", sections: [SectionMarker] = []) {
         self.id = UUID()
         self.lines = lines
         self.wordBank = wordBank
+        self.sections = sections
         self.customTitle = customTitle
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -28,7 +30,7 @@ struct LyricEntry: Identifiable, Codable {
             .description ?? "Untitled"
     }
 
-    // Handle decoding from older data that lacks customTitle
+    // Handle decoding from older data that lacks new fields
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -36,6 +38,7 @@ struct LyricEntry: Identifiable, Codable {
         customTitle = try container.decodeIfPresent(String.self, forKey: .customTitle) ?? ""
         lines = try container.decode([LyricLine].self, forKey: .lines)
         wordBank = try container.decodeIfPresent([String].self, forKey: .wordBank) ?? []
+        sections = try container.decodeIfPresent([SectionMarker].self, forKey: .sections) ?? []
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
@@ -46,5 +49,10 @@ struct LyricEntry: Identifiable, Codable {
             .prefix(50)
             .description ?? "Untitled"
         updatedAt = Date()
+    }
+
+    /// Get the structure summary like "V1 → C → V2 → Br → C"
+    var structureSummary: String {
+        sections.map { $0.type.shortLabel + (($0.number != nil) ? "\($0.number!)" : "") }.joined(separator: " → ")
     }
 }
