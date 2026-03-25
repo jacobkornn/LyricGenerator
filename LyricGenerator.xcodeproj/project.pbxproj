@@ -27,6 +27,7 @@
 		EEFF100D4B1463842829BC39 /* OfflineRhymeDict.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63C1C992353A17D937C2B08 /* OfflineRhymeDict.swift */; };
 		B7D47C8552460662260C757F /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D639F63A43FA0B152BA7FCBF /* ExportView.swift */; };
 		CDAE84929BD6C983BAEF0D4F /* RhymeMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C94454BD864BA886FFC974E /* RhymeMapView.swift */; };
+		F0A1B2C3D4E5F6A7B8C9D0E2 /* EBGaramond-VariableFont_wght.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F6A7B8C9D0E1 /* EBGaramond-VariableFont_wght.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +52,8 @@
 		B63C1C992353A17D937C2B08 /* OfflineRhymeDict.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineRhymeDict.swift; sourceTree = "<group>"; };
 		D639F63A43FA0B152BA7FCBF /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
 		1C94454BD864BA886FFC974E /* RhymeMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RhymeMapView.swift; sourceTree = "<group>"; };
+		F0A1B2C3D4E5F6A7B8C9D0E1 /* EBGaramond-VariableFont_wght.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "EBGaramond-VariableFont_wght.ttf"; sourceTree = "<group>"; };
+		F0A1B2C3D4E5F6A7B8C9D0E3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,7 +84,9 @@
 				AE000004 /* Services */,
 				AE000005 /* ViewModels */,
 				AE000007 /* Views */,
+				F0A1B2C3D4E5F6A7B8C9D0E4 /* Fonts */,
 				AB000014 /* Assets.xcassets */,
+				F0A1B2C3D4E5F6A7B8C9D0E3 /* Info.plist */,
 			);
 			path = LyricGenerator;
 			sourceTree = "<group>";
@@ -137,6 +142,14 @@
 				1C94454BD864BA886FFC974E /* RhymeMapView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		F0A1B2C3D4E5F6A7B8C9D0E4 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				F0A1B2C3D4E5F6A7B8C9D0E1 /* EBGaramond-VariableFont_wght.ttf */,
+			);
+			path = Fonts;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -198,6 +211,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000014 /* Assets.xcassets in Resources */,
+				F0A1B2C3D4E5F6A7B8C9D0E2 /* EBGaramond-VariableFont_wght.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -361,6 +375,7 @@
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LyricGenerator/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -386,6 +401,7 @@
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LyricGenerator/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

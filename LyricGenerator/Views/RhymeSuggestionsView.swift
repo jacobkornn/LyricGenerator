@@ -8,19 +8,40 @@ struct RhymeSuggestionsView: View {
     let onSelect: (String) -> Void
     @Binding var expanded: Bool
 
+    private var visibleSuggestions: [RhymeService.RhymeWord] {
+        expanded ? suggestions : Array(suggestions.prefix(8))
+    }
+
     var body: some View {
         if !suggestions.isEmpty {
-            HStack(alignment: .top, spacing: 0) {
-                Color.clear.frame(width: 36, height: 1)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 12) {
+                    // +/- toggle aligned with rhyme labels
+                    if suggestions.count > 8 {
+                        Button(action: {
+                            withAnimation(.easeOut(duration: 0.2)) { expanded.toggle() }
+                        }) {
+                            Image(systemName: expanded ? "minus" : "plus")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.secondary.opacity(0.5))
+                                .frame(width: 24, height: 24)
+                                .background(Color.secondary.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .help(expanded ? "Show fewer suggestions" : "Show more suggestions")
+                    } else {
+                        Color.clear.frame(width: 24, height: 24)
+                    }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    // Suggestions in a flow layout, clipped to 1 row when collapsed
+                    // Suggestions
                     FlowLayout(spacing: 2) {
                         Text("...")
                             .foregroundColor(.secondary.opacity(0.4))
                             .font(.system(size: 14, weight: .light))
 
-                        ForEach(Array(suggestions.enumerated()), id: \.1.word) { i, rhyme in
+                        ForEach(Array(visibleSuggestions.enumerated()), id: \.1.word) { i, rhyme in
                             HStack(spacing: 0) {
                                 SuggestionChip(
                                     word: rhyme.word,
@@ -29,7 +50,7 @@ struct RhymeSuggestionsView: View {
                                 ) {
                                     onSelect(rhyme.word)
                                 }
-                                if i < suggestions.count - 1 {
+                                if i < visibleSuggestions.count - 1 {
                                     Text(",")
                                         .foregroundColor(.secondary.opacity(0.3))
                                         .font(.system(size: 14))
@@ -37,48 +58,30 @@ struct RhymeSuggestionsView: View {
                             }
                         }
                     }
-                    .frame(maxHeight: expanded ? 200 : 26, alignment: .topLeading)
-                    .clipped()
-
-                    // See more / see less + info
-                    HStack(spacing: 8) {
-                        if suggestions.count > 4 {
-                            Button(action: { withAnimation(.easeOut(duration: 0.2)) { expanded.toggle() } }) {
-                                Text(expanded ? "see less" : "see more (+\(suggestions.count - 4))")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.secondary.opacity(0.5))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        Capsule()
-                                            .stroke(Color.secondary.opacity(0.15))
-                                    )
-                                    .contentShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        if let word = targetWord, let label = targetLabel {
-                            Text("rhymes with \"\(word)\" (\(label))")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary.opacity(0.3))
-                                .italic()
-                                .tracking(0.3)
-                        } else if let word = targetWord {
-                            Text("rhymes with \"\(word)\"")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary.opacity(0.3))
-                                .italic()
-                                .tracking(0.3)
-                        }
-
-                        Text("Tab · ↑↓ · Esc")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.secondary.opacity(0.2))
-                    }
                 }
+
+                // Info row
+                HStack(spacing: 8) {
+                    if let word = targetWord, let label = targetLabel {
+                        Text("rhymes with \"\(word)\" (\(label))")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary.opacity(0.3))
+                            .italic()
+                            .tracking(0.3)
+                    } else if let word = targetWord {
+                        Text("rhymes with \"\(word)\"")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary.opacity(0.3))
+                            .italic()
+                            .tracking(0.3)
+                    }
+
+                    Text("Tab · ↑↓ · Esc")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.secondary.opacity(0.2))
+                }
+                .padding(.leading, 36)
             }
-            .padding(.leading, 0)
             .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }

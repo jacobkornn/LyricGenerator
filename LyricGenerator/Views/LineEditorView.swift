@@ -90,6 +90,7 @@ struct LineEditorView: View {
                         onArrowUp: onArrowUp ?? {},
                         onEscape: onEscSuggestion ?? {}
                     )
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     if let locked = lockedEndWord, isActive {
                         HStack(spacing: 4) {
@@ -218,9 +219,12 @@ struct LyricTextField: NSViewRepresentable {
         field.cell?.wraps = true
         field.cell?.isScrollable = false
         field.placeholderString = ""
+        field.textColor = .labelColor
         field.stringValue = text
         field.delegate = context.coordinator
         field.coordinator = context.coordinator
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return field
     }
 

@@ -122,6 +122,15 @@ class LyricViewModel: ObservableObject {
         sections.removeAll { !referencedIds.contains($0.id) }
     }
 
+    /// Remove trailing empty lines on load, keeping at most one blank line after content
+    private func trimTrailingEmptyLines() {
+        let lastContentIndex = lines.lastIndex(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) ?? -1
+        let keepCount = lastContentIndex + 2 // keep one empty line after last content
+        if lines.count > keepCount && keepCount > 0 {
+            lines = Array(lines.prefix(keepCount))
+        }
+    }
+
     /// Move a section marker to start at a different line
     func moveSection(sectionId: UUID, toLineIndex: Int) {
         guard toLineIndex >= 0 && toLineIndex < lines.count else { return }
@@ -458,6 +467,7 @@ class LyricViewModel: ObservableObject {
         customTitle = entry.customTitle
         sections = entry.sections
         cleanupOrphanedSections()
+        trimTrailingEmptyLines()
         if lines.isEmpty { lines = [LyricLine()] }
         currentEntryId = entry.id
         currentLineIndex = -1
