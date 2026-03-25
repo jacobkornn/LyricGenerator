@@ -55,6 +55,7 @@ class LyricViewModel: ObservableObject {
     private var suggestionTask: Task<Void, Never>?
     private var undoStack: [UndoAction] = []
     private let maxUndoSteps = 50
+    private var debouncedSaveTask: Task<Void, Never>?
 
     init() {
         entries = StorageService.loadEntries()
@@ -81,16 +82,18 @@ class LyricViewModel: ObservableObject {
         if let lineIndex = lineIndex, lineIndex >= 0 && lineIndex < lines.count {
             lines[lineIndex].sectionId = section.id
         } else {
-            // Insert a new empty line after the current line (or at end)
+            // Insert after the current line, or after the last non-empty line
+            let lastContentIndex = lines.lastIndex(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) ?? -1
             let insertIndex: Int
             if currentLineIndex >= 0 && currentLineIndex < lines.count {
                 insertIndex = currentLineIndex + 1
             } else {
-                insertIndex = lines.count
+                insertIndex = max(lastContentIndex + 1, 0)
             }
+            let safeInsert = min(insertIndex, lines.count)
             let newLine = LyricLine(sectionId: section.id)
-            lines.insert(newLine, at: insertIndex)
-            currentLineIndex = insertIndex
+            lines.insert(newLine, at: safeInsert)
+            currentLineIndex = safeInsert
         }
 
         undoStack.append(.sectionAdded(sectionIndex: sections.count - 1))
@@ -126,8 +129,12 @@ class LyricViewModel: ObservableObject {
         for i in 0..<lines.count where lines[i].sectionId == sectionId {
             lines[i].sectionId = nil
         }
-        // Assign to new line
-        lines[toLineIndex].sectionId = sectionId
+        // Clamp: don't allow section to float past last non-empty line
+        let lastContentIndex = lines.lastIndex(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) ?? 0
+        let targetIndex = min(toLineIndex, lastContentIndex + 1)
+        // If target is beyond existing lines, clamp to last line
+        let safeIndex = min(targetIndex, lines.count - 1)
+        lines[safeIndex].sectionId = sectionId
         autoSave()
     }
 
@@ -195,6 +202,17 @@ class LyricViewModel: ObservableObject {
     func updateLineText(at index: Int, text: String) {
         guard index < lines.count else { return }
         lines[index].updateText(text)
+        debouncedAutoSave()
+    }
+
+    /// Debounced save — writes to disk after 1.5s of inactivity
+    private func debouncedAutoSave() {
+        debouncedSaveTask?.cancel()
+        debouncedSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled else { return }
+            self?.autoSave()
+        }
     }
 
     /// Delete an empty line when backspace is pressed on it

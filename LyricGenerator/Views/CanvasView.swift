@@ -132,11 +132,10 @@ struct CanvasView: View {
 
                     // Drop zone after last line for dragging sections to bottom
                     SectionDropZone(lineIndex: vm.lines.count - 1, vm: vm)
-
-                    Spacer(minLength: 200)
                 }
                 .padding(.horizontal, 40)
                 .padding(.top, 40)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .onChange(of: vm.currentLineIndex) { _, newIndex in
                 if let lineId = vm.lines[safe: newIndex]?.id {

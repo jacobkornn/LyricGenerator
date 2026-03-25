@@ -94,6 +94,13 @@ struct ContentView: View {
             }
             return .ignored
         }
+        .onKeyPress(keys: [.init("s")], phases: .down) { press in
+            if press.modifiers.contains(.command) {
+                vm.autoSave()
+                return .handled
+            }
+            return .ignored
+        }
     }
 }
 
