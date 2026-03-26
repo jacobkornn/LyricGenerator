@@ -29,6 +29,11 @@ struct ContentView: View {
             ZStack(alignment: .topTrailing) {
                 CanvasView(vm: vm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Top center: mode toggle (overlaid on canvas)
+                    .overlay(alignment: .top) {
+                        ModeToggleView(vm: vm)
+                            .padding(.top, 12)
+                    }
 
                 // Top-right: icon bar + single floating panel
                 VStack(alignment: .trailing, spacing: 6) {
@@ -40,17 +45,21 @@ struct ContentView: View {
                             help: "Export"
                         ) { toggle(.export) }
 
-                        PanelIconButton(
-                            icon: "point.3.connected.trianglepath.dotted",
-                            isActive: activePanel == .rhymeMap,
-                            help: "Rhyme Map"
-                        ) { toggle(.rhymeMap) }
+                        if vm.showRhymeLabels {
+                            PanelIconButton(
+                                icon: "point.3.connected.trianglepath.dotted",
+                                isActive: activePanel == .rhymeMap,
+                                help: "Rhyme Map"
+                            ) { toggle(.rhymeMap) }
+                        }
 
-                        PanelIconButton(
-                            icon: "slider.horizontal.3",
-                            isActive: activePanel == .settings,
-                            help: "Settings"
-                        ) { toggle(.settings) }
+                        if vm.currentMode != .free {
+                            PanelIconButton(
+                                icon: "slider.horizontal.3",
+                                isActive: activePanel == .settings,
+                                help: "Settings"
+                            ) { toggle(.settings) }
+                        }
 
                         PanelIconButton(
                             icon: "tray.full",

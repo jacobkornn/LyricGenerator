@@ -7,6 +7,8 @@ struct LyricEntry: Identifiable, Codable {
     var lines: [LyricLine]
     var wordBank: [String]
     var sections: [SectionMarker]
+    var mode: EntryMode
+    var poemForm: PoemForm?
     var createdAt: Date
     var updatedAt: Date
 
@@ -16,11 +18,13 @@ struct LyricEntry: Identifiable, Codable {
         return title
     }
 
-    init(lines: [LyricLine] = [], wordBank: [String] = [], customTitle: String = "", sections: [SectionMarker] = []) {
+    init(lines: [LyricLine] = [], wordBank: [String] = [], customTitle: String = "", sections: [SectionMarker] = [], mode: EntryMode = .lyrics, poemForm: PoemForm? = nil) {
         self.id = UUID()
         self.lines = lines
         self.wordBank = wordBank
         self.sections = sections
+        self.mode = mode
+        self.poemForm = poemForm
         self.customTitle = customTitle
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -39,6 +43,8 @@ struct LyricEntry: Identifiable, Codable {
         lines = try container.decode([LyricLine].self, forKey: .lines)
         wordBank = try container.decodeIfPresent([String].self, forKey: .wordBank) ?? []
         sections = try container.decodeIfPresent([SectionMarker].self, forKey: .sections) ?? []
+        mode = try container.decodeIfPresent(EntryMode.self, forKey: .mode) ?? .lyrics
+        poemForm = try container.decodeIfPresent(PoemForm.self, forKey: .poemForm)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }

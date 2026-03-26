@@ -28,6 +28,11 @@
 		B7D47C8552460662260C757F /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D639F63A43FA0B152BA7FCBF /* ExportView.swift */; };
 		CDAE84929BD6C983BAEF0D4F /* RhymeMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C94454BD864BA886FFC974E /* RhymeMapView.swift */; };
 		F0A1B2C3D4E5F6A7B8C9D0E2 /* EBGaramond-VariableFont_wght.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F6A7B8C9D0E1 /* EBGaramond-VariableFont_wght.ttf */; };
+		AA000017 /* EntryMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000017 /* EntryMode.swift */; };
+		AA000018 /* PoemForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000018 /* PoemForm.swift */; };
+		AA000019 /* ModeToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000019 /* ModeToggleView.swift */; };
+		AA000020 /* PoemFormPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000020 /* PoemFormPicker.swift */; };
+		AA000021 /* PoemFormGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000021 /* PoemFormGuideView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,6 +59,11 @@
 		1C94454BD864BA886FFC974E /* RhymeMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RhymeMapView.swift; sourceTree = "<group>"; };
 		F0A1B2C3D4E5F6A7B8C9D0E1 /* EBGaramond-VariableFont_wght.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "EBGaramond-VariableFont_wght.ttf"; sourceTree = "<group>"; };
 		F0A1B2C3D4E5F6A7B8C9D0E3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AB000017 /* EntryMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryMode.swift; sourceTree = "<group>"; };
+		AB000018 /* PoemForm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoemForm.swift; sourceTree = "<group>"; };
+		AB000019 /* ModeToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeToggleView.swift; sourceTree = "<group>"; };
+		AB000020 /* PoemFormPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoemFormPicker.swift; sourceTree = "<group>"; };
+		AB000021 /* PoemFormGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoemFormGuideView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -96,6 +106,8 @@
 			children = (
 				AB000003 /* LyricLine.swift */,
 				AB000004 /* LyricEntry.swift */,
+				AB000017 /* EntryMode.swift */,
+				AB000018 /* PoemForm.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -140,6 +152,9 @@
 				AB000016 /* SettingsView.swift */,
 				D639F63A43FA0B152BA7FCBF /* ExportView.swift */,
 				1C94454BD864BA886FFC974E /* RhymeMapView.swift */,
+				AB000019 /* ModeToggleView.swift */,
+				AB000020 /* PoemFormPicker.swift */,
+				AB000021 /* PoemFormGuideView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -241,6 +256,11 @@
 				EEFF100D4B1463842829BC39 /* OfflineRhymeDict.swift in Sources */,
 				B7D47C8552460662260C757F /* ExportView.swift in Sources */,
 				CDAE84929BD6C983BAEF0D4F /* RhymeMapView.swift in Sources */,
+				AA000017 /* EntryMode.swift in Sources */,
+				AA000018 /* PoemForm.swift in Sources */,
+				AA000019 /* ModeToggleView.swift in Sources */,
+				AA000020 /* PoemFormPicker.swift in Sources */,
+				AA000021 /* PoemFormGuideView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -9,53 +9,57 @@ struct SettingsPanel: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.primary.opacity(0.7))
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("Rhyme Sensitivity")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text(sensitivityLabel)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.orange.opacity(0.8))
+            if vm.showRhymeLabels {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Rhyme Sensitivity")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(sensitivityLabel)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.orange.opacity(0.8))
+                    }
+
+                    Slider(value: $vm.rhymeSensitivity, in: 0...1, step: 0.1)
+                        .controlSize(.small)
+
+                    HStack {
+                        Text("Loose")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary.opacity(0.4))
+                        Spacer()
+                        Text("Strict")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary.opacity(0.4))
+                    }
+
+                    Text(sensitivityDescription)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary.opacity(0.4))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
                 }
 
-                Slider(value: $vm.rhymeSensitivity, in: 0...1, step: 0.1)
-                    .controlSize(.small)
-
-                HStack {
-                    Text("Loose")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary.opacity(0.4))
-                    Spacer()
-                    Text("Strict")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary.opacity(0.4))
-                }
-
-                Text(sensitivityDescription)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.4))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 2)
+                Divider().opacity(0.2)
             }
 
-            Divider().opacity(0.2)
-
-            // Flow pattern toggle
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Flow Pattern")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                    Text("Show rhythm beats per line")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary.opacity(0.4))
+            if vm.showStressPatternOption {
+                // Flow pattern toggle
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Flow Pattern")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("Show rhythm beats per line")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary.opacity(0.4))
+                    }
+                    Spacer()
+                    Toggle("", isOn: $vm.showFlowPattern)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
                 }
-                Spacer()
-                Toggle("", isOn: $vm.showFlowPattern)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
             }
         }
         .padding(14)

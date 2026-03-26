@@ -4,6 +4,7 @@ import AppKit
 struct LineEditorView: View {
     let index: Int
     let line: LyricLine
+    var mode: EntryMode = .lyrics
     let rhymeLabel: String?
     let isActive: Bool
     let lockedEndWord: String?
@@ -14,6 +15,8 @@ struct LineEditorView: View {
     var onBackspaceEmpty: (() -> Void)? = nil
     var onLabelEdit: ((String) -> Void)? = nil
     var targetSyllableCount: Int? = nil
+    /// Per-line syllable target from a poem form (e.g., 5 for first haiku line)
+    var syllableTarget: Int? = nil
     var showStressPattern: Bool = false
     var onTabSuggestion: (() -> Void)? = nil
     var onArrowDown: (() -> Void)? = nil
@@ -32,48 +35,54 @@ struct LineEditorView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Rhyme label
-            ZStack {
-                if editingLabel {
-                    let displayLabel = editLabelText.uppercased()
-                    let color = labelColors[displayLabel] ?? .gray
-                    TextField("", text: $editLabelText)
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(color)
-                        .frame(width: 24, height: 24)
-                        .background(color.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .focused($labelFieldFocused)
-                        .onSubmit { commitLabelEdit() }
-                        .onExitCommand { editingLabel = false }
-                        .onChange(of: labelFieldFocused) { _, focused in
-                            if !focused { commitLabelEdit() }
-                        }
-                        .onAppear { labelFieldFocused = true }
-                } else if let label = rhymeLabel {
-                    Text(label)
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundColor(labelColors[label] ?? .gray)
-                        .frame(width: 24, height: 24)
-                        .background(
-                            (labelColors[label] ?? .gray).opacity(0.12)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .onTapGesture(count: 2) {
-                            editLabelText = label
-                            editingLabel = true
-                        }
-                } else {
-                    Text(" ")
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .frame(width: 24, height: 24)
-                        .opacity(0)
+            // Rhyme label (invisible spacer in free mode to keep alignment)
+            if mode == .free {
+                Color.clear
+                    .frame(width: 24, height: 24)
+                    .padding(.top, 4)
+            } else {
+                ZStack {
+                    if editingLabel {
+                        let displayLabel = editLabelText.uppercased()
+                        let color = labelColors[displayLabel] ?? .gray
+                        TextField("", text: $editLabelText)
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .textFieldStyle(.plain)
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(color)
+                            .frame(width: 24, height: 24)
+                            .background(color.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .focused($labelFieldFocused)
+                            .onSubmit { commitLabelEdit() }
+                            .onExitCommand { editingLabel = false }
+                            .onChange(of: labelFieldFocused) { _, focused in
+                                if !focused { commitLabelEdit() }
+                            }
+                            .onAppear { labelFieldFocused = true }
+                    } else if let label = rhymeLabel {
+                        Text(label)
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundColor(labelColors[label] ?? .gray)
+                            .frame(width: 24, height: 24)
+                            .background(
+                                (labelColors[label] ?? .gray).opacity(0.12)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .onTapGesture(count: 2) {
+                                editLabelText = label
+                                editingLabel = true
+                            }
+                    } else {
+                        Text(" ")
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .frame(width: 24, height: 24)
+                            .opacity(0)
+                    }
                 }
+                .frame(width: 24)
+                .padding(.top, 4)
             }
-            .frame(width: 24)
-            .padding(.top, 4)
 
             // Text field
             VStack(alignment: .leading, spacing: 0) {
@@ -116,43 +125,56 @@ struct LineEditorView: View {
                 }
 
                 // Info row: syllables + stress pattern
-                HStack(spacing: 8) {
-                    // Syllable count & flow indicator
-                    if isActive, let locked = lockedEndWord, let target = targetSyllableCount {
-                        let lockedSyl = SyllableCounter.countWord(locked)
-                        let currentSyl = line.syllableCount
-                        let totalSoFar = currentSyl + lockedSyl
-                        let remaining = target - totalSoFar
-                        HStack(spacing: 6) {
-                            Text("\(currentSyl) + \(lockedSyl) syl")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary.opacity(0.35))
-                            if remaining > 0 {
-                                Text("~\(remaining) more to match flow")
+                if mode != .free {
+                    HStack(spacing: 8) {
+                        // Syllable count & flow indicator
+                        if isActive, let locked = lockedEndWord, let target = targetSyllableCount {
+                            let lockedSyl = SyllableCounter.countWord(locked)
+                            let currentSyl = line.syllableCount
+                            let totalSoFar = currentSyl + lockedSyl
+                            let remaining = target - totalSoFar
+                            HStack(spacing: 6) {
+                                Text("\(currentSyl) + \(lockedSyl) syl")
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.orange.opacity(0.6))
-                            } else if remaining == 0 {
-                                Text("on target")
+                                    .foregroundColor(.secondary.opacity(0.35))
+                                if remaining > 0 {
+                                    Text("~\(remaining) more to match flow")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.orange.opacity(0.6))
+                                } else if remaining == 0 {
+                                    Text("on target")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.green.opacity(0.6))
+                                } else {
+                                    Text("\(abs(remaining)) over")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.red.opacity(0.5))
+                                }
+                            }
+                        } else if !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                            // Show syllable count with form target if available
+                            if let target = syllableTarget {
+                                let syl = line.syllableCount
+                                let color: Color = syl == target ? .green.opacity(0.6) :
+                                                   syl > target ? .red.opacity(0.5) :
+                                                   .orange.opacity(0.6)
+                                Text("\(syl)/\(target) syl")
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.green.opacity(0.6))
+                                    .foregroundColor(color)
                             } else {
-                                Text("\(abs(remaining)) over")
+                                Text("\(line.syllableCount) syl")
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.red.opacity(0.5))
+                                    .foregroundColor(.secondary.opacity(0.35))
                             }
                         }
-                    } else if !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
-                        Text("\(line.syllableCount) syl")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary.opacity(0.35))
-                    }
 
-                    // Stress / beat pattern
-                    if showStressPattern && !line.stressPattern.isEmpty && !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
-                        StressPatternView(pattern: line.stressPattern)
+                        // Stress / beat pattern
+                        if showStressPattern && !line.stressPattern.isEmpty && !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                            StressPatternView(pattern: line.stressPattern)
+                        }
                     }
+                    .padding(.top, 1)
                 }
-                .padding(.top, 1)
             }
         }
         .padding(.vertical, 2)

@@ -33,6 +33,8 @@ class LyricViewModel: ObservableObject {
     @Published var suggestionsExpanded: Bool = false
     @Published var sections: [SectionMarker] = []
     @Published var isDraggingSection: Bool = false
+    @Published var currentMode: EntryMode = .lyrics
+    @Published var currentPoemForm: PoemForm? = nil
     @Published var showFlowPattern: Bool = false {
         didSet {
             UserDefaults.standard.set(showFlowPattern, forKey: "lyric_show_flow_pattern")
@@ -83,18 +85,25 @@ class LyricViewModel: ObservableObject {
         if let lineIndex = lineIndex, lineIndex >= 0 && lineIndex < lines.count {
             lines[lineIndex].sectionId = section.id
         } else {
-            // Insert after the current line, or after the last non-empty line
-            let lastContentIndex = lines.lastIndex(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) ?? -1
-            let insertIndex: Int
-            if currentLineIndex >= 0 && currentLineIndex < lines.count {
-                insertIndex = currentLineIndex + 1
+            // Default: place section on the first line (before content)
+            // If no sections exist yet, attach to line 0
+            // If sections already exist, insert after current line or at end of content
+            if sections.count == 1 && lines.first != nil {
+                // This is the first section — place it at the very start
+                lines[0].sectionId = section.id
             } else {
-                insertIndex = max(lastContentIndex + 1, 0)
+                let lastContentIndex = lines.lastIndex(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) ?? -1
+                let insertIndex: Int
+                if currentLineIndex >= 0 && currentLineIndex < lines.count {
+                    insertIndex = currentLineIndex + 1
+                } else {
+                    insertIndex = max(lastContentIndex + 1, 0)
+                }
+                let safeInsert = min(insertIndex, lines.count)
+                let newLine = LyricLine(sectionId: section.id)
+                lines.insert(newLine, at: safeInsert)
+                currentLineIndex = safeInsert
             }
-            let safeInsert = min(insertIndex, lines.count)
-            let newLine = LyricLine(sectionId: section.id)
-            lines.insert(newLine, at: safeInsert)
-            currentLineIndex = safeInsert
         }
 
         undoStack.append(.sectionAdded(sectionIndex: sections.count - 1))
@@ -221,22 +230,30 @@ class LyricViewModel: ObservableObject {
             lines[index].labelOverride = override
         }
 
-        // Add new empty line with same section
-        let sectionId = lines[index].sectionId
-        var newLine = LyricLine(sectionId: sectionId)
-        newLine.sectionId = sectionId
-        if index == lines.count - 1 {
-            lines.append(newLine)
-        } else {
-            lines.insert(newLine, at: index + 1)
-        }
-        undoStack.append(.lineAdded(lineIndex: index + 1))
-        trimUndoStack()
+        // In poem mode with a fixed line count, don't auto-append past the target
+        let contentLineCount = lines.filter({ !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }).count
+        let atFormLimit = (poemFormLineTarget != nil && contentLineCount >= poemFormLineTarget!)
 
-        currentLineIndex = index + 1
+        if !atFormLimit {
+            // Add new empty line with same section
+            let sectionId = lines[index].sectionId
+            var newLine = LyricLine(sectionId: sectionId)
+            newLine.sectionId = sectionId
+            if index == lines.count - 1 {
+                lines.append(newLine)
+            } else {
+                lines.insert(newLine, at: index + 1)
+            }
+            undoStack.append(.lineAdded(lineIndex: index + 1))
+            trimUndoStack()
+            currentLineIndex = index + 1
+        }
+
         selectedSuggestionIndex = -1
 
-        refreshSchemeAndFetchSuggestions()
+        if currentMode != .free {
+            refreshSchemeAndFetchSuggestions()
+        }
         autoSave()
     }
 
@@ -326,6 +343,21 @@ class LyricViewModel: ObservableObject {
     // MARK: - Suggestions
 
     func refreshSchemeAndFetchSuggestions() {
+        // Free mode: only show word bank suggestions, skip rhyme service
+        if currentMode == .free {
+            schemeString = ""
+            rhymeLabels = Array(repeating: nil, count: lines.count)
+            if !wordBank.isEmpty {
+                suggestions = wordBank.map {
+                    RhymeService.RhymeWord(word: $0, score: 10000, numSyllables: SyllableCounter.countWord($0))
+                }
+            } else {
+                suggestions = []
+            }
+            isLoadingSuggestions = false
+            return
+        }
+
         schemeTask?.cancel()
         suggestionTask?.cancel()
         isLoadingSuggestions = true
@@ -479,9 +511,11 @@ class LyricViewModel: ObservableObject {
             entries[idx].wordBank = wordBank
             entries[idx].customTitle = customTitle
             entries[idx].sections = sections
+            entries[idx].mode = currentMode
+            entries[idx].poemForm = currentPoemForm
             entries[idx].refreshTitle()
         } else {
-            var entry = LyricEntry(lines: lines, wordBank: wordBank, customTitle: customTitle, sections: sections)
+            var entry = LyricEntry(lines: lines, wordBank: wordBank, customTitle: customTitle, sections: sections, mode: currentMode, poemForm: currentPoemForm)
             entry.lines = lines
             entry.wordBank = wordBank
             entry.customTitle = customTitle
@@ -498,6 +532,8 @@ class LyricViewModel: ObservableObject {
         wordBank = entry.wordBank
         customTitle = entry.customTitle
         sections = entry.sections
+        currentMode = entry.mode
+        currentPoemForm = entry.poemForm
         cleanupOrphanedSections()
         trimTrailingEmptyLines()
         if lines.isEmpty { lines = [LyricLine()] }
@@ -507,10 +543,12 @@ class LyricViewModel: ObservableObject {
         suggestions = []
         selectedSuggestionIndex = -1
         undoStack = []
-        refreshScheme()
+        if currentMode != .free {
+            refreshScheme()
+        }
     }
 
-    func newEntry() {
+    func newEntry(mode: EntryMode = .lyrics) {
         autoSave()
         lines = [LyricLine()]
         rhymeLabels = [nil]
@@ -521,6 +559,8 @@ class LyricViewModel: ObservableObject {
         wordBank = []
         customTitle = ""
         sections = []
+        currentMode = mode
+        currentPoemForm = nil
         currentLineIndex = 0
         currentEntryId = nil
         selectedSuggestionIndex = -1
@@ -603,6 +643,56 @@ class LyricViewModel: ObservableObject {
         guard !completed.isEmpty else { return nil }
         let total = completed.reduce(0) { $0 + $1.syllableCount }
         return total / completed.count
+    }
+
+    // MARK: - Mode
+
+    var showRhymeLabels: Bool { currentMode != .free }
+    var showSchemeString: Bool { currentMode != .free }
+    var showSections: Bool { currentMode != .free }
+    var showStressPatternOption: Bool { currentMode != .free }
+
+    var availableSectionTypes: [SectionType] {
+        switch currentMode {
+        case .lyrics: return SectionType.allCases
+        case .poem:   return [.verse, .bridge, .outro, .intro] // Stanza, Volta, Coda, Opening
+        case .free:   return []
+        }
+    }
+
+    /// Per-line syllable target from the current poem form (e.g., 5-7-5 for haiku).
+    func syllableTarget(forLine index: Int) -> Int? {
+        guard currentMode == .poem, let pattern = currentPoemForm?.syllablePattern else { return nil }
+        guard index < pattern.count else { return nil }
+        return pattern[index]
+    }
+
+    /// Total line target from the current poem form.
+    var poemFormLineTarget: Int? {
+        guard currentMode == .poem else { return nil }
+        return currentPoemForm?.lineCount
+    }
+
+    func switchMode(to mode: EntryMode) {
+        currentMode = mode
+        if mode != .poem { currentPoemForm = nil }
+        if mode == .free {
+            // Clear rhyme-specific state
+            suggestions = []
+            suggestionsTargetLabel = nil
+            suggestionsTargetWord = nil
+            lockedEndWord = nil
+            schemeString = ""
+            rhymeLabels = Array(repeating: nil, count: lines.count)
+        } else {
+            refreshScheme()
+        }
+        autoSave()
+    }
+
+    func selectPoemForm(_ form: PoemForm?) {
+        currentPoemForm = form
+        autoSave()
     }
 
     func toggleTheme() {

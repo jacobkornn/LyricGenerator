@@ -33,6 +33,24 @@ enum SectionType: String, Codable, CaseIterable, Equatable {
         case .hook: return "H"
         }
     }
+
+    /// Mode-aware display name (e.g., "Verse" in lyrics, "Stanza" in poem)
+    func displayName(for mode: EntryMode) -> String {
+        switch mode {
+        case .poem:
+            switch self {
+            case .verse:    return "Stanza"
+            case .chorus:   return "Refrain"
+            case .bridge:   return "Volta"
+            case .preChorus: return "Turn"
+            case .outro:    return "Coda"
+            case .intro:    return "Opening"
+            case .hook:     return "Refrain"
+            }
+        default:
+            return rawValue
+        }
+    }
 }
 
 /// A section marker that separates groups of lines

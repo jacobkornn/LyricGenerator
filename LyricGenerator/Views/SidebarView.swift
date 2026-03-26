@@ -14,7 +14,7 @@ struct SidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {
-                Text("Lyrics")
+                Text("Entries")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.primary)
 
@@ -26,7 +26,7 @@ struct SidebarView: View {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("New lyric")
+                .help("New entry")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -37,7 +37,7 @@ struct SidebarView: View {
             if vm.entries.isEmpty {
                 VStack(spacing: 8) {
                     Spacer()
-                    Text("No lyrics yet")
+                    Text("No entries yet")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary.opacity(0.5))
                     Text("Start writing to create one")
@@ -77,10 +77,15 @@ struct SidebarEntryRow: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.displayTitle)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Image(systemName: entry.mode.icon)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.secondary.opacity(0.4))
+                    Text(entry.displayTitle)
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                }
 
                 HStack(spacing: 6) {
                     Text(dateFormatter.string(from: entry.updatedAt))
@@ -94,8 +99,6 @@ struct SidebarEntryRow: View {
                             .foregroundColor(.secondary.opacity(0.4))
                     }
                 }
-
-
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)

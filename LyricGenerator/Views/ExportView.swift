@@ -17,17 +17,19 @@ struct ExportPanel: View {
                 ExportButton(
                     icon: "doc.plaintext",
                     title: "Plain Text",
-                    subtitle: "Clean lyrics with section markers"
+                    subtitle: vm.currentMode == .free ? "Clean text" : "Clean \(vm.currentMode.displayName.lowercased()) with section markers"
                 ) {
                     exportPlainText()
                 }
 
-                ExportButton(
-                    icon: "doc.richtext",
-                    title: "Annotated",
-                    subtitle: "With rhyme scheme, syllables & structure"
-                ) {
-                    exportAnnotated()
+                if vm.currentMode != .free {
+                    ExportButton(
+                        icon: "doc.richtext",
+                        title: "Annotated",
+                        subtitle: "With rhyme scheme, syllables & structure"
+                    ) {
+                        exportAnnotated()
+                    }
                 }
 
                 ExportButton(
@@ -60,14 +62,18 @@ struct ExportPanel: View {
         .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .topTrailing)))
     }
 
+    private var baseFilename: String {
+        vm.customTitle.isEmpty ? vm.currentMode.displayName.lowercased() : vm.customTitle
+    }
+
     private func exportPlainText() {
         let content = vm.exportPlainText()
-        saveToFile(content: content, filename: "\(vm.customTitle.isEmpty ? "lyrics" : vm.customTitle).txt")
+        saveToFile(content: content, filename: "\(baseFilename).txt")
     }
 
     private func exportAnnotated() {
         let content = vm.exportAnnotated()
-        saveToFile(content: content, filename: "\(vm.customTitle.isEmpty ? "lyrics" : vm.customTitle)_annotated.txt")
+        saveToFile(content: content, filename: "\(baseFilename)_annotated.txt")
     }
 
     private func copyToClipboard() {

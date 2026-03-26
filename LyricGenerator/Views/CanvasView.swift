@@ -18,45 +18,70 @@ struct CanvasView: View {
                         .padding(.bottom, 12)
                         .onSubmit { vm.autoSave() }
 
-                    // Scheme display + structure summary
-                    HStack(spacing: 12) {
-                        if !vm.schemeString.isEmpty {
-                            HStack(spacing: 4) {
-                                Text("Scheme:")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.secondary.opacity(0.35))
-                                    .textCase(.uppercase)
-                                    .tracking(0.5)
-                                Text(vm.schemeString)
-                                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(.secondary.opacity(0.5))
+                    // Poem form picker (poem mode only)
+                    if vm.currentMode == .poem {
+                        PoemFormPicker(vm: vm)
+                            .padding(.leading, textLeading)
+                            .padding(.bottom, 8)
+                    }
+
+                    // Poem form guide (poem mode with form selected)
+                    if vm.currentMode == .poem && vm.currentPoemForm != nil {
+                        PoemFormGuideView(vm: vm)
+                            .padding(.leading, textLeading)
+                            .padding(.bottom, 12)
+                    }
+
+                    // Scheme display + structure summary (lyrics & poem only)
+                    if vm.showSchemeString {
+                        HStack(spacing: 12) {
+                            if !vm.schemeString.isEmpty {
+                                HStack(spacing: 4) {
+                                    Text("Scheme:")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.secondary.opacity(0.35))
+                                        .textCase(.uppercase)
+                                        .tracking(0.5)
+                                    Text(vm.schemeString)
+                                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                        .foregroundColor(.secondary.opacity(0.5))
+                                }
                             }
+
+                            if vm.showSections && !vm.sections.isEmpty {
+                                Text(vm.sections.map { $0.type.displayName(for: vm.currentMode) }.joined(separator: " \u{2192} "))
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary.opacity(0.3))
+                                    .italic()
+                            }
+
+                            Spacer()
                         }
+                        .padding(.leading, textLeading)
+                        .padding(.bottom, 16)
+                    }
 
-                        if !vm.sections.isEmpty {
-                            Text(vm.sections.map { $0.displayName }.joined(separator: " → "))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.secondary.opacity(0.3))
-                                .italic()
+                    // Section add button (lyrics & poem only)
+                    if vm.showSections {
+                        SectionPicker(types: vm.availableSectionTypes, mode: vm.currentMode) { type in
+                            vm.addSection(type)
                         }
-
-                        Spacer()
+                        .padding(.leading, textLeading)
+                        .padding(.bottom, 8)
                     }
-                    .padding(.leading, textLeading)
-                    .padding(.bottom, 16)
 
-                    // Section add button
-                    SectionPicker { type in
-                        vm.addSection(type)
+                    // Drop zone before first line (for dragging sections to top)
+                    if vm.showSections {
+                        SectionDropZone(lineIndex: 0, vm: vm, isTopZone: true)
+                            .zIndex(1)
                     }
-                    .padding(.leading, textLeading)
-                    .padding(.bottom, 8)
 
                     // Lines
                     ForEach(Array(vm.lines.enumerated()), id: \.1.id) { index, line in
                         VStack(alignment: .leading, spacing: 0) {
-                            // Section header if this line starts a new section
-                            if let section = vm.sectionForLine(at: index),
+                            // Section header if this line starts a new section (lyrics & poem only)
+                            if vm.showSections,
+                               let section = vm.sectionForLine(at: index),
                                (index == 0 || vm.lines[index - 1].sectionId != line.sectionId) {
                                 SectionHeaderView(
                                     section: section,
@@ -72,22 +97,26 @@ struct CanvasView: View {
                             }
 
                             // Drop zone indicator for dragging sections between lines
-                            SectionDropZone(lineIndex: index, vm: vm)
+                            if vm.showSections {
+                                SectionDropZone(lineIndex: index, vm: vm)
+                            }
 
                             LineEditorView(
                                 index: index,
                                 line: line,
-                                rhymeLabel: vm.rhymeLabels[safe: index] ?? nil,
+                                mode: vm.currentMode,
+                                rhymeLabel: vm.showRhymeLabels ? (vm.rhymeLabels[safe: index] ?? nil) : nil,
                                 isActive: index == vm.currentLineIndex,
-                                lockedEndWord: index == vm.currentLineIndex ? vm.lockedEndWord : nil,
+                                lockedEndWord: (vm.currentMode != .free && index == vm.currentLineIndex) ? vm.lockedEndWord : nil,
                                 onCommit: { vm.commitLine(at: index) },
                                 onTextChange: { text in vm.updateLineText(at: index, text: text) },
                                 onFocus: { vm.currentLineIndex = index },
                                 onCancelLocked: { vm.clearLockedWord() },
                                 onBackspaceEmpty: { vm.deleteEmptyLine(at: index) },
-                                onLabelEdit: { newLabel in vm.overrideLabel(at: index, to: newLabel) },
-                                targetSyllableCount: index == vm.currentLineIndex ? vm.averageSyllableCount : nil,
-                                showStressPattern: vm.showFlowPattern,
+                                onLabelEdit: vm.showRhymeLabels ? { newLabel in vm.overrideLabel(at: index, to: newLabel) } : nil,
+                                targetSyllableCount: index == vm.currentLineIndex ? (vm.syllableTarget(forLine: index) ?? vm.averageSyllableCount) : nil,
+                                syllableTarget: vm.syllableTarget(forLine: index),
+                                showStressPattern: vm.showStressPatternOption && vm.showFlowPattern,
                                 onTabSuggestion: { vm.confirmSelectedSuggestion() },
                                 onArrowDown: { vm.selectNextSuggestion() },
                                 onArrowUp: { vm.selectPreviousSuggestion() },
@@ -132,10 +161,12 @@ struct CanvasView: View {
                     }
 
                     // Drop zone after last line for dragging sections to bottom
-                    SectionDropZone(lineIndex: vm.lines.count - 1, vm: vm)
+                    if vm.showSections {
+                        SectionDropZone(lineIndex: vm.lines.count - 1, vm: vm)
+                    }
                 }
                 .padding(.horizontal, 40)
-                .padding(.top, 40)
+                .padding(.top, 56)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             // Catch-all: clear drag state when drop lands outside a zone or is cancelled
@@ -158,8 +189,14 @@ struct CanvasView: View {
 
 // MARK: - Section Picker (add section button)
 struct SectionPicker: View {
+    var types: [SectionType] = SectionType.allCases
+    var mode: EntryMode = .lyrics
     let onSelect: (SectionType) -> Void
     @State private var isExpanded = false
+
+    private var label: String {
+        mode == .poem ? "Stanza" : "Section"
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -167,7 +204,7 @@ struct SectionPicker: View {
                 HStack(spacing: 4) {
                     Image(systemName: "plus")
                         .font(.system(size: 10, weight: .medium))
-                    Text("Section")
+                    Text(label)
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(.secondary.opacity(0.4))
@@ -181,7 +218,7 @@ struct SectionPicker: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                ForEach(SectionType.allCases, id: \.self) { type in
+                ForEach(types, id: \.self) { type in
                     Button(action: {
                         onSelect(type)
                         withAnimation(.easeOut(duration: 0.15)) { isExpanded = false }
@@ -189,7 +226,7 @@ struct SectionPicker: View {
                         HStack(spacing: 3) {
                             Image(systemName: type.icon)
                                 .font(.system(size: 9))
-                            Text(type.rawValue)
+                            Text(type.displayName(for: mode))
                                 .font(.system(size: 11, weight: .medium))
                         }
                         .foregroundColor(.secondary.opacity(0.6))
@@ -215,6 +252,14 @@ struct SectionHeaderView: View {
     @ObservedObject var vm: LyricViewModel
     @State private var hovered = false
 
+    private var modeAwareDisplayName: String {
+        let typeName = section.type.displayName(for: vm.currentMode)
+        if let number = section.number {
+            return "\(typeName) \(number)"
+        }
+        return typeName
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             Rectangle()
@@ -230,7 +275,7 @@ struct SectionHeaderView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.orange.opacity(0.7))
 
-                Text(section.displayName)
+                Text(modeAwareDisplayName)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.primary.opacity(0.5))
                     .textCase(.uppercase)
@@ -266,6 +311,7 @@ struct SectionHeaderView: View {
 struct SectionDropZone: View {
     let lineIndex: Int
     @ObservedObject var vm: LyricViewModel
+    var isTopZone: Bool = false
     @State private var isTargeted = false
 
     private var isDragging: Bool { vm.isDraggingSection }
@@ -274,10 +320,10 @@ struct SectionDropZone: View {
         // Visible indicator when targeted
         RoundedRectangle(cornerRadius: 2)
             .fill(isTargeted ? Color.orange.opacity(0.25) : Color.clear)
-            .frame(height: isTargeted ? 28 : (isDragging ? 8 : 0))
+            .frame(height: isTargeted ? 28 : (isDragging ? (isTopZone ? 20 : 8) : 0))
             .frame(maxWidth: .infinity)
             // Generous invisible padding extends hit area during drag
-            .padding(.vertical, isDragging ? 10 : 0)
+            .padding(.vertical, isDragging ? (isTopZone ? 16 : 10) : 0)
             .contentShape(Rectangle())
             .animation(.easeOut(duration: 0.15), value: isTargeted)
             .animation(.easeOut(duration: 0.2), value: isDragging)
