@@ -32,6 +32,7 @@ class LyricViewModel: ObservableObject {
     @Published var selectedSuggestionIndex: Int = -1
     @Published var suggestionsExpanded: Bool = false
     @Published var sections: [SectionMarker] = []
+    @Published var isDraggingSection: Bool = false
     @Published var showFlowPattern: Bool = false {
         didSet {
             UserDefaults.standard.set(showFlowPattern, forKey: "lyric_show_flow_pattern")
@@ -131,7 +132,8 @@ class LyricViewModel: ObservableObject {
         }
     }
 
-    /// Move a section marker to start at a different line
+    /// Move a section marker to start at a different line.
+    /// Snaps to the nearest non-blank line so it never lands in a blank-line gap.
     func moveSection(sectionId: UUID, toLineIndex: Int) {
         guard toLineIndex >= 0 && toLineIndex < lines.count else { return }
         // Clear old line assignments for this section
@@ -140,11 +142,41 @@ class LyricViewModel: ObservableObject {
         }
         // Clamp: don't allow section to float past last non-empty line
         let lastContentIndex = lines.lastIndex(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) ?? 0
-        let targetIndex = min(toLineIndex, lastContentIndex + 1)
-        // If target is beyond existing lines, clamp to last line
-        let safeIndex = min(targetIndex, lines.count - 1)
-        lines[safeIndex].sectionId = sectionId
+        let clampedIndex = min(toLineIndex, lastContentIndex + 1)
+        let safeIndex = min(clampedIndex, lines.count - 1)
+
+        // Snap: if target is a blank line, find the nearest non-blank line
+        let finalIndex = snapToNearestContent(from: safeIndex)
+        lines[finalIndex].sectionId = sectionId
         autoSave()
+    }
+
+    /// Find the nearest line that has content (or is at index 0).
+    /// Searches outward from `index`, preferring forward (next content block).
+    private func snapToNearestContent(from index: Int) -> Int {
+        // If already on content or at the very start, use it
+        if index == 0 || !lines[index].text.trimmingCharacters(in: .whitespaces).isEmpty {
+            return index
+        }
+        // Search outward for nearest non-blank line
+        var lo = index - 1
+        var hi = index + 1
+        while lo >= 0 || hi < lines.count {
+            // Prefer forward: snap to the start of the next content block
+            if hi < lines.count && !lines[hi].text.trimmingCharacters(in: .whitespaces).isEmpty {
+                return hi
+            }
+            // Backward: snap to the line just after the previous content
+            if lo >= 0 && !lines[lo].text.trimmingCharacters(in: .whitespaces).isEmpty {
+                // Place section on the line after the previous content line,
+                // unless that's where we started (a blank), in which case use lo
+                let after = lo + 1
+                return after < lines.count ? after : lo
+            }
+            lo -= 1
+            hi += 1
+        }
+        return index
     }
 
     func sectionForLine(at index: Int) -> SectionMarker? {

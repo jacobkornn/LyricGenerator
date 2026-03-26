@@ -64,7 +64,8 @@ struct CanvasView: View {
                                         if let idx = vm.sections.firstIndex(where: { $0.id == section.id }) {
                                             vm.removeSection(at: idx)
                                         }
-                                    }
+                                    },
+                                    vm: vm
                                 )
                                 .padding(.bottom, 20)
                                 .padding(.top, index == 0 ? 8 : 36)
@@ -137,6 +138,13 @@ struct CanvasView: View {
                 .padding(.top, 40)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            // Catch-all: clear drag state when drop lands outside a zone or is cancelled
+            .dropDestination(for: String.self) { _, _ in
+                vm.isDraggingSection = false
+                return false
+            } isTargeted: { targeted in
+                if !targeted { vm.isDraggingSection = false }
+            }
             .onChange(of: vm.currentLineIndex) { _, newIndex in
                 if let lineId = vm.lines[safe: newIndex]?.id {
                     withAnimation(.easeOut(duration: 0.2)) {
@@ -204,6 +212,7 @@ struct SectionPicker: View {
 struct SectionHeaderView: View {
     let section: SectionMarker
     let onRemove: () -> Void
+    @ObservedObject var vm: LyricViewModel
     @State private var hovered = false
 
     var body: some View {
@@ -246,25 +255,36 @@ struct SectionHeaderView: View {
         .frame(maxWidth: .infinity)
         .onHover { hovered = $0 }
         .animation(.easeOut(duration: 0.15), value: hovered)
-        .draggable(section.id.uuidString)
+        .onDrag {
+            vm.isDraggingSection = true
+            return NSItemProvider(object: section.id.uuidString as NSString)
+        }
     }
 }
 
-// MARK: - Drop Zone (only expands during drag)
+// MARK: - Drop Zone (expands during drag for easy targeting)
 struct SectionDropZone: View {
     let lineIndex: Int
     @ObservedObject var vm: LyricViewModel
     @State private var isTargeted = false
 
+    private var isDragging: Bool { vm.isDraggingSection }
+
     var body: some View {
+        // Visible indicator when targeted
         RoundedRectangle(cornerRadius: 2)
             .fill(isTargeted ? Color.orange.opacity(0.25) : Color.clear)
-            .frame(height: isTargeted ? 28 : 0)
+            .frame(height: isTargeted ? 28 : (isDragging ? 8 : 0))
             .frame(maxWidth: .infinity)
+            // Generous invisible padding extends hit area during drag
+            .padding(.vertical, isDragging ? 10 : 0)
+            .contentShape(Rectangle())
             .animation(.easeOut(duration: 0.15), value: isTargeted)
+            .animation(.easeOut(duration: 0.2), value: isDragging)
             .dropDestination(for: String.self) { items, _ in
                 guard let uuidString = items.first, let sectionId = UUID(uuidString: uuidString) else { return false }
                 vm.moveSection(sectionId: sectionId, toLineIndex: lineIndex)
+                vm.isDraggingSection = false
                 return true
             } isTargeted: { targeted in
                 isTargeted = targeted
