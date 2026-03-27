@@ -52,6 +52,29 @@ enum PoemForm: String, Codable, CaseIterable {
         }
     }
 
+    /// Per-line rhyme labels expanded from the template, or nil if no fixed scheme.
+    var rhymeLabelsPerLine: [String?]? {
+        switch self {
+        case .haiku:       return [nil, nil, nil]
+        case .sonnet:      return ["A","B","A","B","C","D","C","D","E","F","E","F","G","G"]
+        case .limerick:    return ["A","A","B","B","A"]
+        case .villanelle:  return ["A","B","A","A","B","A","A","B","A","A","B","A","A","B","A","A","B","A","A"]
+        default:           return nil
+        }
+    }
+
+    /// Line indices where stanza breaks should occur (section headers inserted before these lines).
+    var stanzaBreaks: [Int]? {
+        switch self {
+        case .sonnet:      return [0, 4, 8, 12]  // 3 quatrains + couplet
+        case .villanelle:  return [0, 3, 6, 9, 12, 15]  // 5 tercets + quatrain
+        default:           return nil
+        }
+    }
+
+    /// Whether this form has a fixed template (static line count).
+    var hasTemplate: Bool { lineCount != nil }
+
     /// Short description for the form picker.
     var description: String {
         switch self {

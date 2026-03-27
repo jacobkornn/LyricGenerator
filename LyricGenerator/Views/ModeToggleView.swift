@@ -24,6 +24,7 @@ struct ModeToggleView: View {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(vm.currentMode == mode ? Color.primary.opacity(0.08) : Color.clear)
                     )
+                    .contentShape(Rectangle().inset(by: -6))
                 }
                 .buttonStyle(.plain)
             }

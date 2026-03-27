@@ -35,6 +35,17 @@ class LyricViewModel: ObservableObject {
     @Published var isDraggingSection: Bool = false
     @Published var currentMode: EntryMode = .lyrics
     @Published var currentPoemForm: PoemForm? = nil
+
+    /// Per-mode snapshot so each tab preserves its own content.
+    struct ModeSnapshot {
+        var lines: [LyricLine]
+        var sections: [SectionMarker]
+        var rhymeLabels: [String?]
+        var schemeString: String
+        var currentLineIndex: Int
+        var poemForm: PoemForm?
+    }
+    var modeSnapshots: [EntryMode: ModeSnapshot] = [:]
     @Published var showFlowPattern: Bool = false {
         didSet {
             UserDefaults.standard.set(showFlowPattern, forKey: "lyric_show_flow_pattern")
@@ -230,12 +241,13 @@ class LyricViewModel: ObservableObject {
             lines[index].labelOverride = override
         }
 
-        // In poem mode with a fixed line count, don't auto-append past the target
-        let contentLineCount = lines.filter({ !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }).count
-        let atFormLimit = (poemFormLineTarget != nil && contentLineCount >= poemFormLineTarget!)
-
-        if !atFormLimit {
-            // Add new empty line with same section
+        if isTemplateMode {
+            // Template mode: just move to the next line, don't create one
+            if index + 1 < lines.count {
+                currentLineIndex = index + 1
+            }
+        } else {
+            // Normal mode: add new empty line
             let sectionId = lines[index].sectionId
             var newLine = LyricLine(sectionId: sectionId)
             newLine.sectionId = sectionId
@@ -275,6 +287,12 @@ class LyricViewModel: ObservableObject {
 
     /// Delete an empty line when backspace is pressed on it
     func deleteEmptyLine(at index: Int) {
+        // Don't delete lines in template mode — structure is static
+        guard !isTemplateMode else {
+            // Just move to previous line
+            if index > 0 { currentLineIndex = index - 1 }
+            return
+        }
         guard index > 0, index < lines.count else { return }
         guard lines[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let removed = lines[index]
@@ -336,6 +354,8 @@ class LyricViewModel: ObservableObject {
     }
 
     func refreshScheme() {
+        // Template mode: labels are static, don't re-detect
+        guard !isTemplateMode else { return }
         schemeTask?.cancel()
         schemeTask = Task { _ = await performSchemeRefresh() }
     }
@@ -355,6 +375,21 @@ class LyricViewModel: ObservableObject {
                 suggestions = []
             }
             isLoadingSuggestions = false
+            return
+        }
+
+        // Template mode: labels are static, just fetch suggestions based on them
+        if isTemplateMode {
+            schemeTask?.cancel()
+            suggestionTask?.cancel()
+            isLoadingSuggestions = true
+            schemeTask = Task {
+                // Use existing labels directly — don't re-detect scheme
+                await performSuggestionFetch(using: rhymeLabels)
+                if !Task.isCancelled {
+                    isLoadingSuggestions = false
+                }
+            }
             return
         }
 
@@ -528,6 +563,7 @@ class LyricViewModel: ObservableObject {
     }
 
     func loadEntry(_ entry: LyricEntry) {
+        modeSnapshots = [:]  // Clear snapshots when switching entries
         lines = entry.lines
         wordBank = entry.wordBank
         customTitle = entry.customTitle
@@ -550,6 +586,7 @@ class LyricViewModel: ObservableObject {
 
     func newEntry(mode: EntryMode = .lyrics) {
         autoSave()
+        modeSnapshots = [:]  // Clear snapshots for new entry
         lines = [LyricLine()]
         rhymeLabels = [nil]
         schemeString = ""
@@ -674,25 +711,122 @@ class LyricViewModel: ObservableObject {
     }
 
     func switchMode(to mode: EntryMode) {
+        guard mode != currentMode else { return }
+
+        // Save current mode's state
+        modeSnapshots[currentMode] = ModeSnapshot(
+            lines: lines,
+            sections: sections,
+            rhymeLabels: rhymeLabels,
+            schemeString: schemeString,
+            currentLineIndex: currentLineIndex,
+            poemForm: currentPoemForm
+        )
+
         currentMode = mode
-        if mode != .poem { currentPoemForm = nil }
+
+        // Restore saved state for the new mode, or start fresh
+        if let snapshot = modeSnapshots[mode] {
+            lines = snapshot.lines
+            sections = snapshot.sections
+            rhymeLabels = snapshot.rhymeLabels
+            schemeString = snapshot.schemeString
+            currentLineIndex = snapshot.currentLineIndex
+            currentPoemForm = snapshot.poemForm
+        } else {
+            // Fresh state for a mode we haven't visited yet
+            lines = [LyricLine()]
+            sections = []
+            rhymeLabels = [nil]
+            schemeString = ""
+            currentLineIndex = 0
+            currentPoemForm = nil
+            undoStack = []
+        }
+
+        // Clear transient state
+        suggestions = []
+        suggestionsTargetLabel = nil
+        suggestionsTargetWord = nil
+        lockedEndWord = nil
+        selectedSuggestionIndex = -1
+
         if mode == .free {
-            // Clear rhyme-specific state
-            suggestions = []
-            suggestionsTargetLabel = nil
-            suggestionsTargetWord = nil
-            lockedEndWord = nil
             schemeString = ""
             rhymeLabels = Array(repeating: nil, count: lines.count)
-        } else {
+        } else if mode != .poem {
             refreshScheme()
         }
+
         autoSave()
+    }
+
+    /// Whether the current poem form uses a static template (fixed line count).
+    var isTemplateMode: Bool {
+        currentMode == .poem && (currentPoemForm?.hasTemplate == true)
     }
 
     func selectPoemForm(_ form: PoemForm?) {
         currentPoemForm = form
+        if let form = form, form.hasTemplate {
+            generatePoemTemplate(for: form)
+        } else if form == nil || form?.hasTemplate == false {
+            // Switching away from a fixed form — reset to normal
+            if lines.allSatisfy({ $0.text.trimmingCharacters(in: .whitespaces).isEmpty }) {
+                lines = [LyricLine()]
+                sections = []
+                rhymeLabels = [nil]
+                schemeString = ""
+            }
+        }
         autoSave()
+    }
+
+    private func generatePoemTemplate(for form: PoemForm) {
+        guard let lineCount = form.lineCount else { return }
+        let labels = form.rhymeLabelsPerLine
+        let stanzaBreaks = Set(form.stanzaBreaks ?? [])
+
+        // Clear existing sections
+        sections = []
+
+        // Generate empty lines with pre-assigned labels
+        var newLines: [LyricLine] = []
+        for i in 0..<lineCount {
+            var line = LyricLine()
+            if let labels = labels, i < labels.count, let label = labels[i] {
+                line.labelOverride = label
+            }
+            // Assign stanza sections
+            if stanzaBreaks.contains(i) {
+                let stanzaNumber = (form.stanzaBreaks ?? []).firstIndex(of: i).map { $0 + 1 }
+                let section = SectionMarker(type: .verse, number: stanzaNumber)
+                sections.append(section)
+                line.sectionId = section.id
+            } else if !stanzaBreaks.isEmpty, let lastBreak = (form.stanzaBreaks ?? []).last(where: { $0 <= i }) {
+                // Assign to the section started at the last stanza break
+                let breakIndex = (form.stanzaBreaks ?? []).firstIndex(of: lastBreak)!
+                if breakIndex < sections.count {
+                    line.sectionId = sections[breakIndex].id
+                }
+            }
+            newLines.append(line)
+        }
+
+        lines = newLines
+
+        // Set rhyme labels from template
+        if let labels = labels {
+            rhymeLabels = labels
+        } else {
+            rhymeLabels = Array(repeating: nil, count: lineCount)
+        }
+        schemeString = rhymeLabels.compactMap { $0 }.joined()
+
+        currentLineIndex = 0
+        suggestions = []
+        lockedEndWord = nil
+        undoStack = []
     }
 
     func toggleTheme() {
