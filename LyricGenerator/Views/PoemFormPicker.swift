@@ -6,7 +6,7 @@ struct PoemFormPicker: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(PoemForm.allCases, id: \.self) { form in
+                ForEach(PoemForm.allCases.filter { $0 != .freeVerse }, id: \.self) { form in
                     Button {
                         withAnimation(.easeOut(duration: 0.15)) {
                             if vm.currentPoemForm == form {
