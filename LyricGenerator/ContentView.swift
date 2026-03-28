@@ -97,7 +97,10 @@ struct ContentView: View {
         }
         .preferredColorScheme(vm.isDark ? .dark : .light)
         .onKeyPress(keys: [.init("z")], phases: .down) { press in
-            if press.modifiers.contains(.command) {
+            if press.modifiers.contains(.command) && press.modifiers.contains(.shift) {
+                vm.redo()
+                return .handled
+            } else if press.modifiers.contains(.command) {
                 vm.undo()
                 return .handled
             }

@@ -269,8 +269,12 @@ struct LyricTextField: NSViewRepresentable {
 
         if isActive && !wasActive {
             DispatchQueue.main.async {
+                let alreadyFirstResponder = nsView.window?.firstResponder is NSTextView &&
+                    (nsView.window?.firstResponder as? NSTextView)?.delegate === nsView
                 nsView.window?.makeFirstResponder(nsView)
-                if let editor = nsView.currentEditor() {
+                // Only move cursor to end for programmatic focus;
+                // if user clicked/double-clicked, let AppKit handle the selection.
+                if !alreadyFirstResponder, let editor = nsView.currentEditor() {
                     editor.selectedRange = NSRange(location: editor.string.count, length: 0)
                 }
             }

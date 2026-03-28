@@ -68,6 +68,7 @@ class LyricViewModel: ObservableObject {
     private var schemeTask: Task<Void, Never>?
     private var suggestionTask: Task<Void, Never>?
     private var undoStack: [UndoAction] = []
+    private var redoStack: [UndoAction] = []
     private let maxUndoSteps = 50
     private var debouncedSaveTask: Task<Void, Never>?
 
@@ -117,16 +118,14 @@ class LyricViewModel: ObservableObject {
             }
         }
 
-        undoStack.append(.sectionAdded(sectionIndex: sections.count - 1))
-        trimUndoStack()
+        pushUndo(.sectionAdded(sectionIndex: sections.count - 1))
         autoSave()
     }
 
     func removeSection(at index: Int) {
         guard index < sections.count else { return }
         let removed = sections[index]
-        undoStack.append(.sectionRemoved(sectionIndex: index, section: removed))
-        trimUndoStack()
+        pushUndo(.sectionRemoved(sectionIndex: index, section: removed))
 
         // Clear sectionId from lines
         for i in 0..<lines.count where lines[i].sectionId == removed.id {
@@ -221,8 +220,7 @@ class LyricViewModel: ObservableObject {
         let oldSyl = lines[index].syllableCount
         let oldEnd = lines[index].endWord
         let oldStress = lines[index].stressPattern
-        undoStack.append(.textChange(lineIndex: index, oldText: oldText, oldSyllables: oldSyl, oldEndWord: oldEnd, oldStress: oldStress))
-        trimUndoStack()
+        pushUndo(.textChange(lineIndex: index, oldText: oldText, oldSyllables: oldSyl, oldEndWord: oldEnd, oldStress: oldStress))
 
         // If there's a locked word, ensure it's appended
         if let locked = lockedEndWord {
@@ -256,8 +254,7 @@ class LyricViewModel: ObservableObject {
             } else {
                 lines.insert(newLine, at: index + 1)
             }
-            undoStack.append(.lineAdded(lineIndex: index + 1))
-            trimUndoStack()
+            pushUndo(.lineAdded(lineIndex: index + 1))
             currentLineIndex = index + 1
         }
 
@@ -296,8 +293,7 @@ class LyricViewModel: ObservableObject {
         guard index > 0, index < lines.count else { return }
         guard lines[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let removed = lines[index]
-        undoStack.append(.lineRemoved(lineIndex: index, line: removed))
-        trimUndoStack()
+        pushUndo(.lineRemoved(lineIndex: index, line: removed))
         lines.remove(at: index)
         currentLineIndex = index - 1
         refreshScheme()
@@ -307,8 +303,7 @@ class LyricViewModel: ObservableObject {
     func overrideLabel(at index: Int, to newLabel: String) {
         guard index < lines.count else { return }
         let oldLabel = lines[index].labelOverride
-        undoStack.append(.labelOverride(lineId: lines[index].id, oldLabel: oldLabel))
-        trimUndoStack()
+        pushUndo(.labelOverride(lineId: lines[index].id, oldLabel: oldLabel))
 
         lines[index].labelOverride = newLabel
         // Apply override immediately
@@ -579,6 +574,7 @@ class LyricViewModel: ObservableObject {
         suggestions = []
         selectedSuggestionIndex = -1
         undoStack = []
+        redoStack = []
         if currentMode != .free {
             refreshScheme()
         }
@@ -602,6 +598,7 @@ class LyricViewModel: ObservableObject {
         currentEntryId = nil
         selectedSuggestionIndex = -1
         undoStack = []
+        redoStack = []
     }
 
     func deleteEntry(_ entry: LyricEntry) {
@@ -623,7 +620,14 @@ class LyricViewModel: ObservableObject {
         StorageService.saveEntries(entries)
     }
 
-    // MARK: - Granular Undo
+    // MARK: - Granular Undo / Redo
+
+    /// Push to undo stack and clear redo history (a new action invalidates the redo future).
+    private func pushUndo(_ action: UndoAction) {
+        undoStack.append(action)
+        redoStack = []
+        while undoStack.count > maxUndoSteps { undoStack.removeFirst() }
+    }
 
     private func trimUndoStack() {
         while undoStack.count > maxUndoSteps {
@@ -631,8 +635,31 @@ class LyricViewModel: ObservableObject {
         }
     }
 
-    func undo() {
-        guard let action = undoStack.popLast() else { return }
+    /// Capture the inverse of `action` against the *current* state so it can be re-applied later.
+    private func captureInverse(of action: UndoAction) -> UndoAction? {
+        switch action {
+        case .textChange(let lineIndex, _, _, _, _):
+            guard lineIndex < lines.count else { return nil }
+            let l = lines[lineIndex]
+            return .textChange(lineIndex: lineIndex, oldText: l.text, oldSyllables: l.syllableCount, oldEndWord: l.endWord, oldStress: l.stressPattern)
+        case .lineAdded(let lineIndex):
+            guard lineIndex < lines.count else { return nil }
+            return .lineRemoved(lineIndex: lineIndex, line: lines[lineIndex])
+        case .lineRemoved(let lineIndex, _):
+            return .lineAdded(lineIndex: lineIndex)
+        case .labelOverride(let lineId, _):
+            guard let idx = lines.firstIndex(where: { $0.id == lineId }) else { return nil }
+            return .labelOverride(lineId: lineId, oldLabel: lines[idx].labelOverride)
+        case .sectionAdded(let sectionIndex):
+            guard sectionIndex < sections.count else { return nil }
+            return .sectionRemoved(sectionIndex: sectionIndex, section: sections[sectionIndex])
+        case .sectionRemoved(let sectionIndex, _):
+            return .sectionAdded(sectionIndex: sectionIndex)
+        }
+    }
+
+    /// Apply an action (used by both undo and redo — each action stores the state to restore *to*).
+    private func applyAction(_ action: UndoAction) {
         switch action {
         case .textChange(let lineIndex, let oldText, let oldSyl, let oldEnd, let oldStress):
             if lineIndex < lines.count {
@@ -665,7 +692,24 @@ class LyricViewModel: ObservableObject {
         case .sectionRemoved(let sectionIndex, let section):
             sections.insert(section, at: min(sectionIndex, sections.count))
         }
+    }
 
+    func undo() {
+        guard let action = undoStack.popLast() else { return }
+        let inverse = captureInverse(of: action)
+        applyAction(action)
+        if let inv = inverse { redoStack.append(inv) }
+        lockedEndWord = nil
+        suggestions = []
+        refreshScheme()
+        autoSave()
+    }
+
+    func redo() {
+        guard let action = redoStack.popLast() else { return }
+        let inverse = captureInverse(of: action)
+        applyAction(action)
+        if let inv = inverse { undoStack.append(inv) }
         lockedEndWord = nil
         suggestions = []
         refreshScheme()
@@ -673,6 +717,7 @@ class LyricViewModel: ObservableObject {
     }
 
     var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
 
     /// Average syllable count of completed lines (for flow target)
     var averageSyllableCount: Int? {
@@ -742,6 +787,7 @@ class LyricViewModel: ObservableObject {
             currentLineIndex = 0
             currentPoemForm = nil
             undoStack = []
+        redoStack = []
         }
 
         // Clear transient state
@@ -827,6 +873,7 @@ class LyricViewModel: ObservableObject {
         suggestions = []
         lockedEndWord = nil
         undoStack = []
+        redoStack = []
     }
 
     func toggleTheme() {
