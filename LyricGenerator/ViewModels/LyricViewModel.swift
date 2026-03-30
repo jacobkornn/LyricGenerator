@@ -407,14 +407,15 @@ class LyricViewModel: ObservableObject {
             .map { $0.1 }
 
         let predicted = await rhymeService.predictNextLabel(from: completedLabels)
+        // After any actor await the task may have been superseded — bail without
+        // touching suggestions so the newer task's results remain visible.
+        guard !Task.isCancelled else { return }
         guard let predicted = predicted else {
             suggestions = []
             suggestionsTargetLabel = nil
             suggestionsTargetWord = nil
             return
         }
-
-        guard !Task.isCancelled else { return }
 
         // Find the target word to rhyme with
         var targetWord: String? = nil
@@ -425,6 +426,7 @@ class LyricViewModel: ObservableObject {
             }
         }
 
+        guard !Task.isCancelled else { return }
         guard let target = targetWord else {
             suggestions = []
             suggestionsTargetLabel = nil
@@ -447,6 +449,7 @@ class LyricViewModel: ObservableObject {
 
         // Prepend word bank matches
         let bankMatches = await wordBankRhymes(for: target)
+        guard !Task.isCancelled else { return }
         if !bankMatches.isEmpty {
             let bankWords = bankMatches.map {
                 RhymeService.RhymeWord(word: $0, score: 10000, numSyllables: SyllableCounter.countWord($0))

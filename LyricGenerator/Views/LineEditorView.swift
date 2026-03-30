@@ -251,7 +251,11 @@ struct LyricTextField: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: LyricNSTextField, context: Context) {
-        if nsView.stringValue != text {
+        // When the change came from user typing, the field editor already
+        // has the correct text — skip setting stringValue which resets the cursor.
+        let userEdit = context.coordinator.isUserEditing
+        context.coordinator.isUserEditing = false
+        if nsView.stringValue != text && !userEdit {
             nsView.stringValue = text
         }
 
@@ -271,11 +275,11 @@ struct LyricTextField: NSViewRepresentable {
             DispatchQueue.main.async {
                 let alreadyFirstResponder = nsView.window?.firstResponder is NSTextView &&
                     (nsView.window?.firstResponder as? NSTextView)?.delegate === nsView
-                nsView.window?.makeFirstResponder(nsView)
-                // Only move cursor to end for programmatic focus;
-                // if user clicked/double-clicked, let AppKit handle the selection.
-                if !alreadyFirstResponder, let editor = nsView.currentEditor() {
-                    editor.selectedRange = NSRange(location: editor.string.count, length: 0)
+                // Only move focus when the field doesn't already have it (e.g. after
+                // pressing Enter to create a new line). Never touch the cursor position —
+                // let AppKit place it naturally, just like the Notes app does.
+                if !alreadyFirstResponder {
+                    nsView.window?.makeFirstResponder(nsView)
                 }
             }
         }
@@ -299,6 +303,9 @@ struct LyricTextField: NSViewRepresentable {
         var onArrowUp: () -> Void
         var onEscape: () -> Void
         var wasActive: Bool = false
+        /// Set when the text change came from user typing; prevents
+        /// updateNSView from re-setting stringValue (which resets the cursor).
+        var isUserEditing: Bool = false
 
         init(onTextChange: @escaping (String) -> Void, onEnter: @escaping () -> Void,
              onFocus: @escaping () -> Void, onBackspaceEmpty: @escaping () -> Void,
@@ -316,6 +323,7 @@ struct LyricTextField: NSViewRepresentable {
 
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSTextField else { return }
+            isUserEditing = true
             onTextChange(field.stringValue)
         }
 

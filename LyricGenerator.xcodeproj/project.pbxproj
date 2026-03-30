@@ -177,7 +177,7 @@
 				AF000002 /* Sources */,
 				AD000001 /* Frameworks */,
 				AF000003 /* Resources */,
-				COPYPH001 /* Copy to ~/Applications */,
+				COPYPH001 /* Copy to /Applications */,
 			);
 			buildRules = (
 			);
@@ -268,7 +268,7 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		COPYPH001 /* Copy to ~/Applications */ = {
+		COPYPH001 /* Copy to /Applications */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -277,14 +277,14 @@
 			);
 			inputPaths = (
 			);
-			name = "Copy to ~/Applications";
+			name = "Copy to /Applications";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "mkdir -p \"$HOME/Applications\"\nrm -rf \"$HOME/Applications/LyricGenerator.app\"\ncp -R \"${BUILT_PRODUCTS_DIR}/${FULL_PRODUCT_NAME}\" \"$HOME/Applications/LyricGenerator.app\"\n";
+			shellScript = "killall LyricGenerator 2>/dev/null || true\nrm -rf \"/Applications/LyricGenerator.app\"\ncp -R \"${BUILT_PRODUCTS_DIR}/${FULL_PRODUCT_NAME}\" \"/Applications/LyricGenerator.app\"\nopen \"/Applications/LyricGenerator.app\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
