@@ -29,11 +29,28 @@ struct ContentView: View {
             ZStack(alignment: .topTrailing) {
                 CanvasView(vm: vm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Top center: mode toggle (overlaid on canvas)
-                    .overlay(alignment: .top) {
-                        ModeToggleView(vm: vm)
-                            .padding(.top, 12)
-                    }
+                    .mask(
+                        VStack(spacing: 0) {
+                            // Text scrolled into this zone is fully hidden
+                            Color.clear
+                                .frame(height: 46)
+                            // Subtle fade: text approaching the menu fades out
+                            LinearGradient(
+                                colors: [.clear, .black],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .frame(height: 18)
+                            // Everything below is fully visible
+                            Color.black
+                        }
+                    )
+
+                // Top center: mode toggle (above scrolling content)
+                ModeToggleView(vm: vm)
+                    .padding(.top, 12)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .zIndex(10)
 
                 // Top-right: icon bar + single floating panel
                 VStack(alignment: .trailing, spacing: 6) {
@@ -93,6 +110,7 @@ struct ContentView: View {
                     .frame(width: 260, alignment: .trailing)
                 }
                 .padding(16)
+                .zIndex(10)
             }
         }
         .preferredColorScheme(vm.isDark ? .dark : .light)

@@ -32,8 +32,8 @@ struct CanvasView: View {
                             .padding(.bottom, 12)
                     }
 
-                    // Scheme display + structure summary (lyrics & poem only)
-                    if vm.showSchemeString {
+                    // Scheme display + structure summary (lyrics & poem only, hidden during multi-select)
+                    if vm.showSchemeString && !vm.hasMultiLineSelection {
                         HStack(spacing: 12) {
                             if !vm.schemeString.isEmpty {
                                 HStack(spacing: 4) {
@@ -107,10 +107,18 @@ struct CanvasView: View {
                                 mode: vm.currentMode,
                                 rhymeLabel: vm.showRhymeLabels ? (vm.rhymeLabels[safe: index] ?? nil) : nil,
                                 isActive: index == vm.currentLineIndex,
+                                isSelected: vm.selectedLines.contains(index),
+                                hasMultiLineSelection: vm.hasMultiLineSelection,
                                 lockedEndWord: (vm.currentMode != .free && index == vm.currentLineIndex) ? vm.lockedEndWord : nil,
                                 onCommit: { vm.commitLine(at: index) },
-                                onTextChange: { text in vm.updateLineText(at: index, text: text) },
-                                onFocus: { vm.currentLineIndex = index },
+                                onTextChange: { text in
+                                    vm.clearMultiLineSelection()
+                                    vm.updateLineText(at: index, text: text)
+                                },
+                                onFocus: {
+                                vm.clearMultiLineSelection()
+                                vm.currentLineIndex = index
+                            },
                                 onCancelLocked: { vm.clearLockedWord() },
                                 onBackspaceEmpty: { vm.deleteEmptyLine(at: index) },
                                 onLabelEdit: vm.showRhymeLabels ? { newLabel in vm.overrideLabel(at: index, to: newLabel) } : nil,
@@ -120,7 +128,8 @@ struct CanvasView: View {
                                 onTabSuggestion: { vm.confirmSelectedSuggestion() },
                                 onArrowDown: { vm.selectNextSuggestion() },
                                 onArrowUp: { vm.selectPreviousSuggestion() },
-                                onEscSuggestion: { vm.dismissSuggestions() }
+                                onEscSuggestion: { vm.dismissSuggestions() },
+                                onSelectAll: { vm.selectAllLines() }
                             )
                             .id(line.id)
 
@@ -151,7 +160,9 @@ struct CanvasView: View {
                                         targetWord: vm.suggestionsTargetWord,
                                         selectedIndex: vm.selectedSuggestionIndex,
                                         onSelect: { word in vm.selectSuggestion(word) },
-                                        expanded: $vm.suggestionsExpanded
+                                        expanded: $vm.suggestionsExpanded,
+                                        availableLabels: vm.currentMode != .free ? vm.availableRhymeLabels : [],
+                                        onSwitchLabel: vm.currentMode != .free ? { label in vm.switchSuggestionLabel(to: label) } : nil
                                     )
                                     .padding(.top, 2)
                                     .padding(.bottom, 4)
@@ -166,7 +177,7 @@ struct CanvasView: View {
                     }
                 }
                 .padding(.horizontal, 40)
-                .padding(.top, 56)
+                .padding(.top, 80)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             // Catch-all: clear drag state when drop lands outside a zone or is cancelled

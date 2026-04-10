@@ -7,6 +7,8 @@ struct RhymeSuggestionsView: View {
     var selectedIndex: Int = -1
     let onSelect: (String) -> Void
     @Binding var expanded: Bool
+    var availableLabels: [String] = []
+    var onSwitchLabel: ((String?) -> Void)? = nil
 
     private var visibleSuggestions: [RhymeService.RhymeWord] {
         expanded ? suggestions : Array(suggestions.prefix(8))
@@ -63,11 +65,25 @@ struct RhymeSuggestionsView: View {
                 // Info row
                 HStack(spacing: 8) {
                     if let word = targetWord, let label = targetLabel {
-                        Text("rhymes with \"\(word)\" (\(label))")
+                        Text("rhymes with \"\(word)\"")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(.secondary.opacity(0.3))
                             .italic()
                             .tracking(0.3)
+
+                        // Label switcher
+                        if availableLabels.count > 1, let onSwitch = onSwitchLabel {
+                            SuggestionLabelPicker(
+                                currentLabel: label,
+                                labels: availableLabels,
+                                onSwitch: onSwitch
+                            )
+                        } else {
+                            Text("(\(label))")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary.opacity(0.3))
+                                .italic()
+                        }
                     } else if let word = targetWord {
                         Text("rhymes with \"\(word)\"")
                             .font(.system(size: 10, weight: .medium))
@@ -171,5 +187,55 @@ struct FlowLayout: Layout {
         }
 
         return (positions, CGSize(width: maxX, height: y + rowHeight))
+    }
+}
+
+// MARK: - Label picker for switching which rhyme label suggestions target
+
+struct SuggestionLabelPicker: View {
+    let currentLabel: String
+    let labels: [String]
+    let onSwitch: (String?) -> Void
+
+    private static let labelColors: [String: Color] = [
+        "A": .orange, "B": .cyan, "C": .purple, "D": .pink,
+        "E": .green, "F": .yellow, "G": .mint, "H": .indigo,
+    ]
+
+    private var color: Color {
+        Self.labelColors[currentLabel] ?? .gray
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(labels, id: \.self) { label in
+                Button {
+                    onSwitch(label == currentLabel ? nil : label)
+                } label: {
+                    HStack {
+                        Text(label)
+                        if label == currentLabel {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text(currentLabel)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(color.opacity(0.9))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(color.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(color.opacity(0.25), lineWidth: 0.5)
+                )
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 }

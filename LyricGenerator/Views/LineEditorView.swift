@@ -7,6 +7,8 @@ struct LineEditorView: View {
     var mode: EntryMode = .lyrics
     let rhymeLabel: String?
     let isActive: Bool
+    var isSelected: Bool = false
+    var hasMultiLineSelection: Bool = false
     let lockedEndWord: String?
     let onCommit: () -> Void
     let onTextChange: (String) -> Void
@@ -22,6 +24,7 @@ struct LineEditorView: View {
     var onArrowDown: (() -> Void)? = nil
     var onArrowUp: (() -> Void)? = nil
     var onEscSuggestion: (() -> Void)? = nil
+    var onSelectAll: (() -> Void)? = nil
 
     @State private var lockedHovered: Bool = false
     @State private var editingLabel: Bool = false
@@ -35,8 +38,8 @@ struct LineEditorView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Rhyme label (invisible spacer in free mode to keep alignment)
-            if mode == .free {
+            // Rhyme label (hidden during multi-line selection, invisible spacer in free mode)
+            if mode == .free || hasMultiLineSelection {
                 Color.clear
                     .frame(width: 24, height: 24)
                     .padding(.top, 4)
@@ -97,7 +100,8 @@ struct LineEditorView: View {
                         onTab: onTabSuggestion ?? {},
                         onArrowDown: onArrowDown ?? {},
                         onArrowUp: onArrowUp ?? {},
-                        onEscape: onEscSuggestion ?? {}
+                        onEscape: onEscSuggestion ?? {},
+                        onSelectAll: onSelectAll ?? {}
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -178,6 +182,12 @@ struct LineEditorView: View {
             }
         }
         .padding(.vertical, 2)
+        .background(
+            isSelected
+                ? RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.accentColor.opacity(0.15))
+                : nil
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             onFocus()
@@ -228,6 +238,7 @@ struct LyricTextField: NSViewRepresentable {
     let onArrowDown: () -> Void
     let onArrowUp: () -> Void
     let onEscape: () -> Void
+    let onSelectAll: () -> Void
 
     func makeNSView(context: Context) -> LyricNSTextField {
         let field = LyricNSTextField()
@@ -267,6 +278,7 @@ struct LyricTextField: NSViewRepresentable {
         context.coordinator.onArrowDown = onArrowDown
         context.coordinator.onArrowUp = onArrowUp
         context.coordinator.onEscape = onEscape
+        context.coordinator.onSelectAll = onSelectAll
 
         let wasActive = context.coordinator.wasActive
         context.coordinator.wasActive = isActive
@@ -289,7 +301,8 @@ struct LyricTextField: NSViewRepresentable {
         Coordinator(
             onTextChange: onTextChange, onEnter: onEnter, onFocus: onFocus,
             onBackspaceEmpty: onBackspaceEmpty, onTab: onTab,
-            onArrowDown: onArrowDown, onArrowUp: onArrowUp, onEscape: onEscape
+            onArrowDown: onArrowDown, onArrowUp: onArrowUp, onEscape: onEscape,
+            onSelectAll: onSelectAll
         )
     }
 
@@ -302,6 +315,7 @@ struct LyricTextField: NSViewRepresentable {
         var onArrowDown: () -> Void
         var onArrowUp: () -> Void
         var onEscape: () -> Void
+        var onSelectAll: () -> Void
         var wasActive: Bool = false
         /// Set when the text change came from user typing; prevents
         /// updateNSView from re-setting stringValue (which resets the cursor).
@@ -310,7 +324,8 @@ struct LyricTextField: NSViewRepresentable {
         init(onTextChange: @escaping (String) -> Void, onEnter: @escaping () -> Void,
              onFocus: @escaping () -> Void, onBackspaceEmpty: @escaping () -> Void,
              onTab: @escaping () -> Void, onArrowDown: @escaping () -> Void,
-             onArrowUp: @escaping () -> Void, onEscape: @escaping () -> Void) {
+             onArrowUp: @escaping () -> Void, onEscape: @escaping () -> Void,
+             onSelectAll: @escaping () -> Void) {
             self.onTextChange = onTextChange
             self.onEnter = onEnter
             self.onFocus = onFocus
@@ -319,6 +334,7 @@ struct LyricTextField: NSViewRepresentable {
             self.onArrowDown = onArrowDown
             self.onArrowUp = onArrowUp
             self.onEscape = onEscape
+            self.onSelectAll = onSelectAll
         }
 
         func controlTextDidChange(_ obj: Notification) {
@@ -367,4 +383,14 @@ struct LyricTextField: NSViewRepresentable {
 
 class LyricNSTextField: NSTextField {
     weak var coordinator: LyricTextField.Coordinator?
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Cmd+A: select all lines instead of just text in this field
+        if event.modifierFlags.contains(.command),
+           event.charactersIgnoringModifiers == "a" {
+            coordinator?.onSelectAll()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }

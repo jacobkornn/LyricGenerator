@@ -31,10 +31,26 @@ class LyricViewModel: ObservableObject {
     @Published var isLoadingSuggestions: Bool = false
     @Published var selectedSuggestionIndex: Int = -1
     @Published var suggestionsExpanded: Bool = false
+    @Published var suggestionsOverrideLabel: String? = nil
     @Published var sections: [SectionMarker] = []
     @Published var isDraggingSection: Bool = false
     @Published var currentMode: EntryMode = .lyrics
     @Published var currentPoemForm: PoemForm? = nil
+    @Published var selectedLines: Set<Int> = []
+
+    /// True when more than one line is selected (multi-select mode).
+    var hasMultiLineSelection: Bool { selectedLines.count > 1 }
+
+    /// Select all lines (Cmd+A behaviour).
+    func selectAllLines() {
+        selectedLines = Set(0..<lines.count)
+        currentLineIndex = -1
+    }
+
+    /// Clear multi-line selection (called when user focuses a single line).
+    func clearMultiLineSelection() {
+        if !selectedLines.isEmpty { selectedLines = [] }
+    }
 
     /// Per-mode snapshot so each tab preserves its own content.
     struct ModeSnapshot {
@@ -269,6 +285,7 @@ class LyricViewModel: ObservableObject {
     func updateLineText(at index: Int, text: String) {
         guard index < lines.count else { return }
         lines[index].updateText(text)
+        suggestionsOverrideLabel = nil
         debouncedAutoSave()
     }
 
@@ -406,28 +423,35 @@ class LyricViewModel: ObservableObject {
             .filter { i, _ in i < lines.count && !lines[i].text.trimmingCharacters(in: .whitespaces).isEmpty }
             .map { $0.1 }
 
-        let predicted = await rhymeService.predictNextLabel(from: completedLabels)
-        // After any actor await the task may have been superseded — bail without
-        // touching suggestions so the newer task's results remain visible.
+        let autoLabel = await rhymeService.predictNextLabel(from: completedLabels)
         guard !Task.isCancelled else { return }
-        guard let predicted = predicted else {
-            suggestions = []
-            suggestionsTargetLabel = nil
-            suggestionsTargetWord = nil
-            return
+        var predicted = suggestionsOverrideLabel ?? autoLabel
+
+        // Find the target word to rhyme with for the predicted label
+        var targetWord: String? = nil
+        if let p = predicted {
+            for (i, label) in freshLabels.enumerated().reversed() {
+                if label == p && i < lines.count && !lines[i].endWord.isEmpty {
+                    targetWord = lines[i].endWord
+                    break
+                }
+            }
         }
 
-        // Find the target word to rhyme with
-        var targetWord: String? = nil
-        for (i, label) in freshLabels.enumerated().reversed() {
-            if label == predicted && i < lines.count && !lines[i].endWord.isEmpty {
-                targetWord = lines[i].endWord
-                break
+        // Fallback: if no prediction or no target word, use the most recent label
+        // that has a rhymeable end word so suggestions always appear
+        if targetWord == nil {
+            for (i, label) in freshLabels.enumerated().reversed() {
+                if let label = label, i < lines.count && !lines[i].endWord.isEmpty {
+                    predicted = label
+                    targetWord = lines[i].endWord
+                    break
+                }
             }
         }
 
         guard !Task.isCancelled else { return }
-        guard let target = targetWord else {
+        guard let predicted = predicted, let target = targetWord else {
             suggestions = []
             suggestionsTargetLabel = nil
             suggestionsTargetWord = nil
@@ -472,6 +496,31 @@ class LyricViewModel: ObservableObject {
         suggestionsTargetLabel = predicted
         suggestionsTargetWord = target
         selectedSuggestionIndex = -1
+    }
+
+    /// Unique rhyme labels currently in use (e.g. ["A", "B", "C", "D"]).
+    var availableRhymeLabels: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for label in rhymeLabels.compactMap({ $0 }) {
+            if seen.insert(label).inserted {
+                result.append(label)
+            }
+        }
+        return result
+    }
+
+    /// Switch which label suggestions are tailored to.
+    func switchSuggestionLabel(to label: String?) {
+        suggestionsOverrideLabel = label
+        suggestionTask?.cancel()
+        isLoadingSuggestions = true
+        suggestionTask = Task {
+            await performSuggestionFetch(using: rhymeLabels)
+            if !Task.isCancelled {
+                isLoadingSuggestions = false
+            }
+        }
     }
 
     private func wordBankRhymes(for target: String) async -> [String] {
