@@ -199,13 +199,8 @@ struct SuggestionLabelPicker: View {
     let labelOptions: [LabelOption]
     let onSwitch: (LabelOption?) -> Void
 
-    private static let labelColors: [String: Color] = [
-        "A": .orange, "B": .cyan, "C": .purple, "D": .pink,
-        "E": .green, "F": .yellow, "G": .mint, "H": .indigo,
-    ]
-
     private var color: Color {
-        Self.labelColors[currentLabel] ?? .gray
+        RhymeLabelColors.color(for: currentLabel)
     }
 
     /// The currently active option, matched by label + ending

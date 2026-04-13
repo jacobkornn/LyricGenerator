@@ -27,6 +27,7 @@
 		EEFF100D4B1463842829BC39 /* OfflineRhymeDict.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63C1C992353A17D937C2B08 /* OfflineRhymeDict.swift */; };
 		B7D47C8552460662260C757F /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D639F63A43FA0B152BA7FCBF /* ExportView.swift */; };
 		CDAE84929BD6C983BAEF0D4F /* RhymeMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C94454BD864BA886FFC974E /* RhymeMapView.swift */; };
+		RLCL00001 /* RhymeLabelColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = RLCL00002 /* RhymeLabelColors.swift */; };
 		F0A1B2C3D4E5F6A7B8C9D0E2 /* EBGaramond-VariableFont_wght.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F6A7B8C9D0E1 /* EBGaramond-VariableFont_wght.ttf */; };
 		AA000017 /* EntryMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000017 /* EntryMode.swift */; };
 		AA000018 /* PoemForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000018 /* PoemForm.swift */; };
@@ -57,6 +58,7 @@
 		B63C1C992353A17D937C2B08 /* OfflineRhymeDict.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineRhymeDict.swift; sourceTree = "<group>"; };
 		D639F63A43FA0B152BA7FCBF /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
 		1C94454BD864BA886FFC974E /* RhymeMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RhymeMapView.swift; sourceTree = "<group>"; };
+		RLCL00002 /* RhymeLabelColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RhymeLabelColors.swift; sourceTree = "<group>"; };
 		F0A1B2C3D4E5F6A7B8C9D0E1 /* EBGaramond-VariableFont_wght.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "EBGaramond-VariableFont_wght.ttf"; sourceTree = "<group>"; };
 		F0A1B2C3D4E5F6A7B8C9D0E3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AB000017 /* EntryMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryMode.swift; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 				AB000016 /* SettingsView.swift */,
 				D639F63A43FA0B152BA7FCBF /* ExportView.swift */,
 				1C94454BD864BA886FFC974E /* RhymeMapView.swift */,
+				RLCL00002 /* RhymeLabelColors.swift */,
 				AB000019 /* ModeToggleView.swift */,
 				AB000020 /* PoemFormPicker.swift */,
 				AB000021 /* PoemFormGuideView.swift */,
@@ -257,6 +260,7 @@
 				EEFF100D4B1463842829BC39 /* OfflineRhymeDict.swift in Sources */,
 				B7D47C8552460662260C757F /* ExportView.swift in Sources */,
 				CDAE84929BD6C983BAEF0D4F /* RhymeMapView.swift in Sources */,
+				RLCL00001 /* RhymeLabelColors.swift in Sources */,
 				AA000017 /* EntryMode.swift in Sources */,
 				AA000018 /* PoemForm.swift in Sources */,
 				AA000019 /* ModeToggleView.swift in Sources */,

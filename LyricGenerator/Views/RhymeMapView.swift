@@ -4,10 +4,9 @@ import SwiftUI
 struct RhymeMapPanel: View {
     @ObservedObject var vm: LyricViewModel
 
-    private let labelColors: [String: Color] = [
-        "A": .orange, "B": .cyan, "C": .purple, "D": .pink,
-        "E": .green, "F": .yellow, "G": .mint, "H": .indigo,
-    ]
+    private func labelColor(_ label: String) -> Color {
+        RhymeLabelColors.color(for: label)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -34,7 +33,7 @@ struct RhymeMapPanel: View {
                             for connection in vm.rhymeConnections {
                                 let fromY = CGFloat(connection.from) * lineHeight + lineHeight / 2
                                 let toY = CGFloat(connection.to) * lineHeight + lineHeight / 2
-                                let color = labelColors[connection.label] ?? .gray
+                                let color = labelColor(connection.label)
 
                                 // Draw arc
                                 let midY = (fromY + toY) / 2
@@ -76,7 +75,7 @@ struct RhymeMapPanel: View {
                                         if let label = vm.rhymeLabels[safe: index] ?? nil {
                                             Text(label)
                                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                                .foregroundColor(labelColors[label] ?? .gray)
+                                                .foregroundColor(labelColor(label))
                                                 .frame(width: 12, alignment: .center)
                                         } else {
                                             Text(" ")

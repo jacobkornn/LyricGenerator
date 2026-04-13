@@ -184,6 +184,7 @@ class LyricViewModel: ObservableObject {
         }
         sections.remove(at: index)
         cleanupOrphanedSections()
+        renumberSections()
         autoSave()
     }
 
@@ -191,6 +192,41 @@ class LyricViewModel: ObservableObject {
     private func cleanupOrphanedSections() {
         let referencedIds = Set(lines.compactMap { $0.sectionId })
         sections.removeAll { !referencedIds.contains($0.id) }
+    }
+
+    /// Renumber sections of the same type sequentially based on their order in `lines`.
+    /// For example, after deleting Hook 1 out of Hook 1/2/3, the remaining become Hook 1/2.
+    /// Chorus and Bridge are excluded (they always have nil numbers).
+    private func renumberSections() {
+        // Build a map from sectionId → first line index it appears on
+        var sectionLineIndex: [UUID: Int] = [:]
+        for (i, line) in lines.enumerated() {
+            if let sid = line.sectionId, sectionLineIndex[sid] == nil {
+                sectionLineIndex[sid] = i
+            }
+        }
+
+        // Group section indices by type, sorted by their position in lines
+        var typeGroups: [SectionType: [Int]] = [:]
+        for (si, section) in sections.enumerated() {
+            typeGroups[section.type, default: []].append(si)
+        }
+
+        for (type, indices) in typeGroups {
+            // Chorus and Bridge don't get numbers
+            if type == .chorus || type == .bridge { continue }
+
+            // Sort by position in lines
+            let sorted = indices.sorted { a, b in
+                let posA = sectionLineIndex[sections[a].id] ?? Int.max
+                let posB = sectionLineIndex[sections[b].id] ?? Int.max
+                return posA < posB
+            }
+
+            for (rank, sectionIndex) in sorted.enumerated() {
+                sections[sectionIndex].number = rank + 1
+            }
+        }
     }
 
     /// Remove trailing empty lines on load, keeping at most one blank line after content
@@ -218,6 +254,7 @@ class LyricViewModel: ObservableObject {
         // Snap: if target is a blank line, find the nearest non-blank line
         let finalIndex = snapToNearestContent(from: safeIndex)
         lines[finalIndex].sectionId = sectionId
+        renumberSections()
         autoSave()
     }
 
@@ -687,6 +724,7 @@ class LyricViewModel: ObservableObject {
         currentMode = entry.mode
         currentPoemForm = entry.poemForm
         cleanupOrphanedSections()
+        renumberSections()
         trimTrailingEmptyLines()
         if lines.isEmpty { lines = [LyricLine()] }
         currentEntryId = entry.id

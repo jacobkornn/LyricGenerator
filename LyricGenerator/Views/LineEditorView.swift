@@ -31,10 +31,9 @@ struct LineEditorView: View {
     @State private var editLabelText: String = ""
     @FocusState private var labelFieldFocused: Bool
 
-    private let labelColors: [String: Color] = [
-        "A": .orange, "B": .cyan, "C": .purple, "D": .pink,
-        "E": .green, "F": .yellow, "G": .mint, "H": .indigo,
-    ]
+    private func labelColor(_ label: String) -> Color {
+        RhymeLabelColors.color(for: label)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -47,7 +46,7 @@ struct LineEditorView: View {
                 ZStack {
                     if editingLabel {
                         let displayLabel = editLabelText.uppercased()
-                        let color = labelColors[displayLabel] ?? .gray
+                        let color = labelColor(displayLabel)
                         TextField("", text: $editLabelText)
                             .font(.system(size: 13, weight: .semibold, design: .monospaced))
                             .textFieldStyle(.plain)
@@ -66,10 +65,10 @@ struct LineEditorView: View {
                     } else if let label = rhymeLabel {
                         Text(label)
                             .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                            .foregroundColor(labelColors[label] ?? .gray)
+                            .foregroundColor(labelColor(label))
                             .frame(width: 24, height: 24)
                             .background(
-                                (labelColors[label] ?? .gray).opacity(0.12)
+                                (labelColor(label)).opacity(0.12)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                             .onTapGesture(count: 2) {
