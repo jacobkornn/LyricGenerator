@@ -161,8 +161,14 @@ struct CanvasView: View {
                                         selectedIndex: vm.selectedSuggestionIndex,
                                         onSelect: { word in vm.selectSuggestion(word) },
                                         expanded: $vm.suggestionsExpanded,
-                                        availableLabels: vm.currentMode != .free ? vm.availableRhymeLabels : [],
-                                        onSwitchLabel: vm.currentMode != .free ? { label in vm.switchSuggestionLabel(to: label) } : nil
+                                        availableLabelOptions: vm.currentMode != .free ? vm.availableRhymeLabelOptions : [],
+                                        onSwitchLabel: vm.currentMode != .free ? { option in
+                                            if let option = option {
+                                                vm.switchSuggestionLabel(to: option.label, targetWord: option.targetWord)
+                                            } else {
+                                                vm.switchSuggestionLabel(to: nil)
+                                            }
+                                        } : nil
                                     )
                                     .padding(.top, 2)
                                     .padding(.bottom, 4)

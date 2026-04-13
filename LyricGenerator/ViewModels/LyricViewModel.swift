@@ -12,6 +12,40 @@ enum UndoAction {
     case sectionRemoved(sectionIndex: Int, section: SectionMarker)
 }
 
+/// Represents a dropdown option pairing a rhyme label with its ending sound.
+struct LabelOption: Identifiable, Equatable {
+    let label: String
+    let ending: String
+    let targetWord: String
+    var id: String { "\(label)|\(ending)" }
+
+    /// Extract the phonetic ending of a word (from the last vowel cluster onward).
+    /// e.g. "night" → "ight", "day" → "ay", "love" → "ove", "brain" → "ain"
+    static func extractEnding(from word: String) -> String {
+        let vowels: Set<Character> = ["a", "e", "i", "o", "u", "y"]
+        let lower = word.lowercased().filter { $0.isLetter }
+        guard !lower.isEmpty else { return word }
+        let chars = Array(lower)
+
+        // Walk backwards to find the start of the rhyming portion:
+        // Find the last vowel cluster and include it + trailing consonants
+        var i = chars.count - 1
+
+        // Skip trailing consonants
+        while i >= 0 && !vowels.contains(chars[i]) {
+            i -= 1
+        }
+        // Skip the vowel cluster
+        while i >= 0 && vowels.contains(chars[i]) {
+            i -= 1
+        }
+
+        let ending = String(chars[(i + 1)...])
+        // If the ending is the whole word (e.g., short words), just return it
+        return ending.isEmpty ? lower : ending
+    }
+}
+
 @MainActor
 class LyricViewModel: ObservableObject {
     @Published var lines: [LyricLine] = [LyricLine()]
@@ -32,6 +66,7 @@ class LyricViewModel: ObservableObject {
     @Published var selectedSuggestionIndex: Int = -1
     @Published var suggestionsExpanded: Bool = false
     @Published var suggestionsOverrideLabel: String? = nil
+    @Published var suggestionsOverrideWord: String? = nil
     @Published var sections: [SectionMarker] = []
     @Published var isDraggingSection: Bool = false
     @Published var currentMode: EntryMode = .lyrics
@@ -428,8 +463,8 @@ class LyricViewModel: ObservableObject {
         var predicted = suggestionsOverrideLabel ?? autoLabel
 
         // Find the target word to rhyme with for the predicted label
-        var targetWord: String? = nil
-        if let p = predicted {
+        var targetWord: String? = suggestionsOverrideWord
+        if targetWord == nil, let p = predicted {
             for (i, label) in freshLabels.enumerated().reversed() {
                 if label == p && i < lines.count && !lines[i].endWord.isEmpty {
                     targetWord = lines[i].endWord
@@ -510,9 +545,43 @@ class LyricViewModel: ObservableObject {
         return result
     }
 
+    /// Label options with ending sounds for the suggestion picker.
+    /// Each unique (label, ending) pair gets its own entry so the user
+    /// can target a specific ending within the same rhyme group.
+    var availableRhymeLabelOptions: [LabelOption] {
+        var seen = Set<String>() // "A|ight" dedup key
+        var result: [LabelOption] = []
+        for (i, label) in rhymeLabels.enumerated() {
+            guard let label = label, i < lines.count else { continue }
+            let word = lines[i].endWord
+            guard !word.isEmpty else { continue }
+            let ending = LabelOption.extractEnding(from: word)
+            let key = "\(label)|\(ending)"
+            if seen.insert(key).inserted {
+                result.append(LabelOption(label: label, ending: ending, targetWord: word))
+            }
+        }
+        return result
+    }
+
     /// Switch which label suggestions are tailored to.
     func switchSuggestionLabel(to label: String?) {
         suggestionsOverrideLabel = label
+        suggestionsOverrideWord = nil
+        suggestionTask?.cancel()
+        isLoadingSuggestions = true
+        suggestionTask = Task {
+            await performSuggestionFetch(using: rhymeLabels)
+            if !Task.isCancelled {
+                isLoadingSuggestions = false
+            }
+        }
+    }
+
+    /// Switch suggestions to a specific label + target word (for ending-specific selection).
+    func switchSuggestionLabel(to label: String?, targetWord: String?) {
+        suggestionsOverrideLabel = label
+        suggestionsOverrideWord = targetWord
         suggestionTask?.cancel()
         isLoadingSuggestions = true
         suggestionTask = Task {

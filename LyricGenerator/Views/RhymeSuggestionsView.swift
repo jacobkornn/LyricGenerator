@@ -7,8 +7,8 @@ struct RhymeSuggestionsView: View {
     var selectedIndex: Int = -1
     let onSelect: (String) -> Void
     @Binding var expanded: Bool
-    var availableLabels: [String] = []
-    var onSwitchLabel: ((String?) -> Void)? = nil
+    var availableLabelOptions: [LabelOption] = []
+    var onSwitchLabel: ((LabelOption?) -> Void)? = nil
 
     private var visibleSuggestions: [RhymeService.RhymeWord] {
         expanded ? suggestions : Array(suggestions.prefix(8))
@@ -72,10 +72,11 @@ struct RhymeSuggestionsView: View {
                             .tracking(0.3)
 
                         // Label switcher
-                        if availableLabels.count > 1, let onSwitch = onSwitchLabel {
+                        if availableLabelOptions.count > 1, let onSwitch = onSwitchLabel {
                             SuggestionLabelPicker(
                                 currentLabel: label,
-                                labels: availableLabels,
+                                currentTargetWord: targetWord,
+                                labelOptions: availableLabelOptions,
                                 onSwitch: onSwitch
                             )
                         } else {
@@ -194,8 +195,9 @@ struct FlowLayout: Layout {
 
 struct SuggestionLabelPicker: View {
     let currentLabel: String
-    let labels: [String]
-    let onSwitch: (String?) -> Void
+    let currentTargetWord: String?
+    let labelOptions: [LabelOption]
+    let onSwitch: (LabelOption?) -> Void
 
     private static let labelColors: [String: Color] = [
         "A": .orange, "B": .cyan, "C": .purple, "D": .pink,
@@ -206,18 +208,21 @@ struct SuggestionLabelPicker: View {
         Self.labelColors[currentLabel] ?? .gray
     }
 
+    /// The currently active option, matched by label + ending
+    private var currentOptionId: String? {
+        guard let word = currentTargetWord else { return nil }
+        let ending = LabelOption.extractEnding(from: word)
+        return "\(currentLabel)|\(ending)"
+    }
+
     var body: some View {
         Menu {
-            ForEach(labels, id: \.self) { label in
+            ForEach(labelOptions) { option in
+                let isActive = option.id == currentOptionId
                 Button {
-                    onSwitch(label == currentLabel ? nil : label)
+                    onSwitch(isActive ? nil : option)
                 } label: {
-                    HStack {
-                        Text(label)
-                        if label == currentLabel {
-                            Image(systemName: "checkmark")
-                        }
-                    }
+                    Text("\(isActive ? "✓  " : "")\(option.label) – ends with \"\(option.ending)\"")
                 }
             }
         } label: {
