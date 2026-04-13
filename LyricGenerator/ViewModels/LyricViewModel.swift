@@ -72,6 +72,9 @@ class LyricViewModel: ObservableObject {
     @Published var currentMode: EntryMode = .lyrics
     @Published var currentPoemForm: PoemForm? = nil
     @Published var selectedLines: Set<Int> = []
+    @Published var abletonProjects: [AbletonProject] = []
+    @Published var isAbletonPanelVisible: Bool = false
+    @Published var isScanningAbleton: Bool = false
 
     /// True when more than one line is selected (multi-select mode).
     var hasMultiLineSelection: Bool { selectedLines.count > 1 }
@@ -120,7 +123,7 @@ class LyricViewModel: ObservableObject {
     private var suggestionTask: Task<Void, Never>?
     private var undoStack: [UndoAction] = []
     private var redoStack: [UndoAction] = []
-    private let maxUndoSteps = 50
+    private let maxUndoSteps = 200
     private var debouncedSaveTask: Task<Void, Never>?
 
     init() {
@@ -148,28 +151,14 @@ class LyricViewModel: ObservableObject {
         if let lineIndex = lineIndex, lineIndex >= 0 && lineIndex < lines.count {
             lines[lineIndex].sectionId = section.id
         } else {
-            // Default: place section on the first line (before content)
-            // If no sections exist yet, attach to line 0
-            // If sections already exist, insert after current line or at end of content
-            if sections.count == 1 && lines.first != nil {
-                // This is the first section — place it at the very start
-                lines[0].sectionId = section.id
-            } else {
-                let lastContentIndex = lines.lastIndex(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) ?? -1
-                let insertIndex: Int
-                if currentLineIndex >= 0 && currentLineIndex < lines.count {
-                    insertIndex = currentLineIndex + 1
-                } else {
-                    insertIndex = max(lastContentIndex + 1, 0)
-                }
-                let safeInsert = min(insertIndex, lines.count)
-                let newLine = LyricLine(sectionId: section.id)
-                lines.insert(newLine, at: safeInsert)
-                currentLineIndex = safeInsert
-            }
+            // Always add at the bottom of the page
+            let newLine = LyricLine(sectionId: section.id)
+            lines.append(newLine)
+            currentLineIndex = lines.count - 1
         }
 
         pushUndo(.sectionAdded(sectionIndex: sections.count - 1))
+        renumberSections()
         autoSave()
     }
 
@@ -238,52 +227,29 @@ class LyricViewModel: ObservableObject {
         }
     }
 
-    /// Move a section marker to start at a different line.
-    /// Snaps to the nearest non-blank line so it never lands in a blank-line gap.
+    /// Move a section header to start at a different line.
+    /// Only moves the anchor (first line); other lines in the section keep their membership.
     func moveSection(sectionId: UUID, toLineIndex: Int) {
-        guard toLineIndex >= 0 && toLineIndex < lines.count else { return }
-        // Clear old line assignments for this section
-        for i in 0..<lines.count where lines[i].sectionId == sectionId {
-            lines[i].sectionId = nil
-        }
-        // Clamp: don't allow section to float past last non-empty line
-        let lastContentIndex = lines.lastIndex(where: { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }) ?? 0
-        let clampedIndex = min(toLineIndex, lastContentIndex + 1)
-        let safeIndex = min(clampedIndex, lines.count - 1)
+        let safeIndex = max(0, min(toLineIndex, lines.count - 1))
 
-        // Snap: if target is a blank line, find the nearest non-blank line
-        let finalIndex = snapToNearestContent(from: safeIndex)
-        lines[finalIndex].sectionId = sectionId
+        // Find the current anchor — first line that shows this section's header
+        guard let oldAnchor = lines.indices.first(where: { lines[$0].sectionId == sectionId }) else { return }
+
+        // Nothing to do if dropping on the same line
+        if oldAnchor == safeIndex { return }
+
+        // If the target line already has a different section, swap anchors
+        if let existingId = lines[safeIndex].sectionId, existingId != sectionId {
+            lines[oldAnchor].sectionId = existingId
+            lines[safeIndex].sectionId = sectionId
+        } else {
+            // Clear only the old anchor, set the new one
+            lines[oldAnchor].sectionId = nil
+            lines[safeIndex].sectionId = sectionId
+        }
+
         renumberSections()
         autoSave()
-    }
-
-    /// Find the nearest line that has content (or is at index 0).
-    /// Searches outward from `index`, preferring forward (next content block).
-    private func snapToNearestContent(from index: Int) -> Int {
-        // If already on content or at the very start, use it
-        if index == 0 || !lines[index].text.trimmingCharacters(in: .whitespaces).isEmpty {
-            return index
-        }
-        // Search outward for nearest non-blank line
-        var lo = index - 1
-        var hi = index + 1
-        while lo >= 0 || hi < lines.count {
-            // Prefer forward: snap to the start of the next content block
-            if hi < lines.count && !lines[hi].text.trimmingCharacters(in: .whitespaces).isEmpty {
-                return hi
-            }
-            // Backward: snap to the line just after the previous content
-            if lo >= 0 && !lines[lo].text.trimmingCharacters(in: .whitespaces).isEmpty {
-                // Place section on the line after the previous content line,
-                // unless that's where we started (a blank), in which case use lo
-                let after = lo + 1
-                return after < lines.count ? after : lo
-            }
-            lo -= 1
-            hi += 1
-        }
-        return index
     }
 
     func sectionForLine(at index: Int) -> SectionMarker? {
@@ -777,6 +743,21 @@ class LyricViewModel: ObservableObject {
             selectedSuggestionIndex = -1
         }
         StorageService.saveEntries(entries)
+    }
+
+    // MARK: - Ableton Project Scanning
+
+    func scanForAbletonProjects() async {
+        guard let entryId = currentEntryId,
+              let entry = entries.first(where: { $0.id == entryId }) else {
+            abletonProjects = []
+            return
+        }
+        let title = entry.displayTitle
+        isScanningAbleton = true
+        let results = await AbletonScanService.findMatchingProjects(for: title)
+        abletonProjects = results
+        isScanningAbleton = false
     }
 
     // MARK: - Granular Undo / Redo

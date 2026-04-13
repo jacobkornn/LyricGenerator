@@ -46,6 +46,12 @@ struct ContentView: View {
                         }
                     )
 
+                // Top-left: Ableton project shortcut
+                AbletonShortcutButton(vm: vm)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .zIndex(10)
+
                 // Top center: mode toggle (above scrolling content)
                 ModeToggleView(vm: vm)
                     .padding(.top, 12)
@@ -115,11 +121,15 @@ struct ContentView: View {
         }
         .preferredColorScheme(vm.isDark ? .dark : .light)
         .onKeyPress(keys: [.init("z")], phases: .down) { press in
+            if press.modifiers.contains(.command) {
+                vm.undo()
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(keys: [.init("Z")], phases: .down) { press in
             if press.modifiers.contains(.command) && press.modifiers.contains(.shift) {
                 vm.redo()
-                return .handled
-            } else if press.modifiers.contains(.command) {
-                vm.undo()
                 return .handled
             }
             return .ignored

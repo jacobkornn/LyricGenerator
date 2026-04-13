@@ -34,6 +34,8 @@
 		AA000019 /* ModeToggleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000019 /* ModeToggleView.swift */; };
 		AA000020 /* PoemFormPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000020 /* PoemFormPicker.swift */; };
 		AA000021 /* PoemFormGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000021 /* PoemFormGuideView.swift */; };
+		AA000022 /* AbletonScanService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000022 /* AbletonScanService.swift */; };
+		AA000023 /* AbletonShortcutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000023 /* AbletonShortcutView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +68,8 @@
 		AB000019 /* ModeToggleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeToggleView.swift; sourceTree = "<group>"; };
 		AB000020 /* PoemFormPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoemFormPicker.swift; sourceTree = "<group>"; };
 		AB000021 /* PoemFormGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoemFormGuideView.swift; sourceTree = "<group>"; };
+		AB000022 /* AbletonScanService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AbletonScanService.swift; sourceTree = "<group>"; };
+		AB000023 /* AbletonShortcutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AbletonShortcutView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -122,6 +126,7 @@
 				AB000007 /* SyllableCounter.swift */,
 				E7C47274A67E5DB5F3BF4C8C /* StressAnalyzer.swift */,
 				B63C1C992353A17D937C2B08 /* OfflineRhymeDict.swift */,
+				AB000022 /* AbletonScanService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -158,6 +163,7 @@
 				AB000019 /* ModeToggleView.swift */,
 				AB000020 /* PoemFormPicker.swift */,
 				AB000021 /* PoemFormGuideView.swift */,
+				AB000023 /* AbletonShortcutView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -266,6 +272,8 @@
 				AA000019 /* ModeToggleView.swift in Sources */,
 				AA000020 /* PoemFormPicker.swift in Sources */,
 				AA000021 /* PoemFormGuideView.swift in Sources */,
+				AA000022 /* AbletonScanService.swift in Sources */,
+				AA000023 /* AbletonShortcutView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

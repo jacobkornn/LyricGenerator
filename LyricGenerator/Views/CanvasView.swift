@@ -70,36 +70,26 @@ struct CanvasView: View {
                         .padding(.bottom, 8)
                     }
 
-                    // Drop zone before first line (for dragging sections to top)
-                    if vm.showSections {
-                        SectionDropZone(lineIndex: 0, vm: vm, isTopZone: true)
-                            .zIndex(1)
-                    }
-
                     // Lines
                     ForEach(Array(vm.lines.enumerated()), id: \.1.id) { index, line in
-                        VStack(alignment: .leading, spacing: 0) {
-                            // Section header if this line starts a new section (lyrics & poem only)
-                            if vm.showSections,
-                               let section = vm.sectionForLine(at: index),
-                               (index == 0 || vm.lines[index - 1].sectionId != line.sectionId) {
-                                SectionHeaderView(
-                                    section: section,
-                                    onRemove: {
-                                        if let idx = vm.sections.firstIndex(where: { $0.id == section.id }) {
-                                            vm.removeSection(at: idx)
-                                        }
-                                    },
-                                    vm: vm
-                                )
-                                .padding(.bottom, 20)
-                                .padding(.top, index == 0 ? 8 : 36)
-                            }
-
-                            // Drop zone indicator for dragging sections between lines
-                            if vm.showSections {
-                                SectionDropZone(lineIndex: index, vm: vm)
-                            }
+                        SectionDropTarget(lineIndex: index, vm: vm) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                // Section header if this line starts a new section (lyrics & poem only)
+                                if vm.showSections,
+                                   let section = vm.sectionForLine(at: index),
+                                   (index == 0 || vm.lines[index - 1].sectionId != line.sectionId) {
+                                    SectionHeaderView(
+                                        section: section,
+                                        onRemove: {
+                                            if let idx = vm.sections.firstIndex(where: { $0.id == section.id }) {
+                                                vm.removeSection(at: idx)
+                                            }
+                                        },
+                                        vm: vm
+                                    )
+                                    .padding(.bottom, 20)
+                                    .padding(.top, index == 0 ? 8 : 36)
+                                }
 
                             LineEditorView(
                                 index: index,
@@ -175,18 +165,14 @@ struct CanvasView: View {
                                 }
                             }
                         }
-                    }
-
-                    // Drop zone after last line for dragging sections to bottom
-                    if vm.showSections {
-                        SectionDropZone(lineIndex: vm.lines.count - 1, vm: vm)
+                        } // close SectionDropTarget
                     }
                 }
                 .padding(.horizontal, 40)
                 .padding(.top, 80)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            // Catch-all: clear drag state when drop lands outside a zone or is cancelled
+            // Catch-all: clear drag state when drop lands outside a zone
             .dropDestination(for: String.self) { _, _ in
                 vm.isDraggingSection = false
                 return false
@@ -324,33 +310,41 @@ struct SectionHeaderView: View {
     }
 }
 
-// MARK: - Drop Zone (expands during drag for easy targeting)
-struct SectionDropZone: View {
+// MARK: - Section Drop Target (wraps each line row)
+struct SectionDropTarget<Content: View>: View {
     let lineIndex: Int
     @ObservedObject var vm: LyricViewModel
-    var isTopZone: Bool = false
+    @ViewBuilder let content: Content
     @State private var isTargeted = false
 
-    private var isDragging: Bool { vm.isDraggingSection }
-
     var body: some View {
-        // Visible indicator when targeted
-        RoundedRectangle(cornerRadius: 2)
-            .fill(isTargeted ? Color.orange.opacity(0.25) : Color.clear)
-            .frame(height: isTargeted ? 28 : (isDragging ? (isTopZone ? 20 : 8) : 0))
-            .frame(maxWidth: .infinity)
-            // Generous invisible padding extends hit area during drag
-            .padding(.vertical, isDragging ? (isTopZone ? 16 : 10) : 0)
-            .contentShape(Rectangle())
-            .animation(.easeOut(duration: 0.15), value: isTargeted)
-            .animation(.easeOut(duration: 0.2), value: isDragging)
-            .dropDestination(for: String.self) { items, _ in
-                guard let uuidString = items.first, let sectionId = UUID(uuidString: uuidString) else { return false }
-                vm.moveSection(sectionId: sectionId, toLineIndex: lineIndex)
-                vm.isDraggingSection = false
-                return true
-            } isTargeted: { targeted in
+        VStack(alignment: .leading, spacing: 0) {
+            // Drop indicator above the line
+            if isTargeted {
+                HStack(spacing: 0) {
+                    Circle()
+                        .fill(Color.orange.opacity(0.7))
+                        .frame(width: 6, height: 6)
+                    Rectangle()
+                        .fill(Color.orange.opacity(0.4))
+                        .frame(height: 2)
+                }
+                .frame(maxWidth: .infinity)
+                .transition(.opacity)
+            }
+
+            content
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let uuidString = items.first,
+                  let sectionId = UUID(uuidString: uuidString) else { return false }
+            vm.moveSection(sectionId: sectionId, toLineIndex: lineIndex)
+            vm.isDraggingSection = false
+            return true
+        } isTargeted: { targeted in
+            withAnimation(.easeOut(duration: 0.1)) {
                 isTargeted = targeted
             }
+        }
     }
 }
